@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>五子棋AI训练系统</title>
+    <title>智能五子棋AI学习系统</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -61,6 +61,13 @@
         }
         button.secondary:hover {
             background-color: #e0e0e0;
+        }
+        button.warning {
+            background-color: #ff9800;
+            color: white;
+        }
+        button.warning:hover {
+            background-color: #e68a00;
         }
         #board {
             display: grid;
@@ -174,15 +181,26 @@
         .log-entry.draw {
             color: #FF9800;
         }
+        .move-history {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .move-history button {
+            padding: 2px 5px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
-    <h1>五子棋AI训练系统</h1>
+    <h1>智能五子棋AI学习系统</h1>
     
     <div class="controls">
         <div class="control-group">
             <h3>游戏控制</h3>
             <button id="newGame">新游戏</button>
+            <button id="undoMove" class="warning" title="撤销上一步">悔棋</button>
             <select id="firstPlayer">
                 <option value="human">玩家先手</option>
                 <option value="ai">AI先手</option>
@@ -247,6 +265,7 @@
         <div id="trainingLog" class="training-log">
             <h3>训练日志</h3>
             <div id="logEntries"></div>
+            <div class="move-history" id="moveHistory"></div>
         </div>
     </div>
 
@@ -257,28 +276,73 @@
             currentPlayer: 1, // 1=黑, 2=白
             gameOver: false,
             lastMove: null,
+            moveHistory: [], // 新增：走棋历史记录
+            boardHistory: [], // 新增：棋盘历史记录
             learningData: JSON.parse(localStorage.getItem('gomokuLearningData')) || {
                 wins: [],
                 losses: [],
-                aiBattleStats: { ai1Wins: 0, ai2Wins: 0, draws: 0 }
+                aiBattleStats: { ai1Wins: 0, ai2Wins: 0, draws: 0 },
+                patternWeights: { // 新增：模式权重学习
+                    OPEN_FOUR: 10000,
+                    HALF_OPEN_FOUR: 5000,
+                    OPEN_THREE: 2000,
+                    HALF_OPEN_THREE: 500,
+                    OPEN_TWO: 200,
+                    HALF_OPEN_TWO: 50,
+                    OPEN_ONE: 10,
+                    HALF_OPEN_ONE: 1
+                }
             },
             debugMode: false,
             isTraining: false,
             isAIBattle: false,
-            trainingQueue: 0
+            trainingQueue: 0,
+            aiBattlePlayers: [] // 记录对战AI的玩家
         };
 
-        // 模式定义
+        // 模式定义（使用学习到的权重）
         const PATTERNS = {
             FIVE: { score: 100000, name: '五连' },
-            OPEN_FOUR: { score: 10000, name: '活四' },
-            HALF_OPEN_FOUR: { score: 5000, name: '冲四' },
-            OPEN_THREE: { score: 2000, name: '活三' },
-            HALF_OPEN_THREE: { score: 500, name: '眠三' },
-            OPEN_TWO: { score: 200, name: '活二' },
-            HALF_OPEN_TWO: { score: 50, name: '眠二' },
-            OPEN_ONE: { score: 10, name: '活一' },
-            HALF_OPEN_ONE: { score: 1, name: '眠一' }
+            OPEN_FOUR: { 
+                score: gameState.learningData.patternWeights.OPEN_FOUR, 
+                name: '活四',
+                type: 'OPEN_FOUR'
+            },
+            HALF_OPEN_FOUR: { 
+                score: gameState.learningData.patternWeights.HALF_OPEN_FOUR, 
+                name: '冲四',
+                type: 'HALF_OPEN_FOUR'
+            },
+            OPEN_THREE: { 
+                score: gameState.learningData.patternWeights.OPEN_THREE, 
+                name: '活三',
+                type: 'OPEN_THREE'
+            },
+            HALF_OPEN_THREE: { 
+                score: gameState.learningData.patternWeights.HALF_OPEN_THREE, 
+                name: '眠三',
+                type: 'HALF_OPEN_THREE'
+            },
+            OPEN_TWO: { 
+                score: gameState.learningData.patternWeights.OPEN_TWO, 
+                name: '活二',
+                type: 'OPEN_TWO'
+            },
+            HALF_OPEN_TWO: { 
+                score: gameState.learningData.patternWeights.HALF_OPEN_TWO, 
+                name: '眠二',
+                type: 'HALF_OPEN_TWO'
+            },
+            OPEN_ONE: { 
+                score: gameState.learningData.patternWeights.OPEN_ONE, 
+                name: '活一',
+                type: 'OPEN_ONE'
+            },
+            HALF_OPEN_ONE: { 
+                score: gameState.learningData.patternWeights.HALF_OPEN_ONE, 
+                name: '眠一',
+                type: 'HALF_OPEN_ONE'
+            }
         };
 
         // 方向向量
@@ -327,6 +391,11 @@
 
         // 执行落子
         function makeMove(row, col, player) {
+            // 保存当前棋盘状态到历史记录
+            gameState.boardHistory.push(JSON.parse(JSON.stringify(gameState.board)));
+            gameState.moveHistory.push({ row, col, player });
+            updateMoveHistoryDisplay();
+            
             gameState.board[row][col] = player;
             gameState.lastMove = { row, col, player };
             gameState.currentPlayer = player === 1 ? 2 : 1;
@@ -341,15 +410,23 @@
                 // 记录学习数据
                 if (!gameState.isTraining && !gameState.isAIBattle) {
                     if (player === 2) { // AI赢了
-                        gameState.learningData.wins.push(JSON.parse(JSON.stringify(gameState.board)));
+                        gameState.learningData.wins.push({
+                            board: JSON.parse(JSON.stringify(gameState.board)),
+                            moves: [...gameState.moveHistory]
+                        });
                         if (gameState.learningData.wins.length > 100) {
                             gameState.learningData.wins.shift();
                         }
+                        adjustPatternWeights(true); // 根据胜利调整权重
                     } else { // 玩家赢了
-                        gameState.learningData.losses.push(JSON.parse(JSON.stringify(gameState.board)));
+                        gameState.learningData.losses.push({
+                            board: JSON.parse(JSON.stringify(gameState.board)),
+                            moves: [...gameState.moveHistory]
+                        });
                         if (gameState.learningData.losses.length > 100) {
                             gameState.learningData.losses.shift();
                         }
+                        adjustPatternWeights(false); // 根据失败调整权重
                     }
                     saveLearningData();
                 }
@@ -362,6 +439,127 @@
                     updateAIBattleStats();
                 }
             }
+        }
+
+        // 悔棋功能
+        function undoMove() {
+            if (gameState.isTraining || gameState.isAIBattle || 
+                gameState.moveHistory.length === 0 || 
+                (gameState.moveHistory.length === 1 && document.getElementById('firstPlayer').value === 'ai')) {
+                return;
+            }
+            
+            // 至少保留一步棋（如果是AI先手）
+            const minMoves = document.getElementById('firstPlayer').value === 'ai' ? 1 : 0;
+            if (gameState.moveHistory.length <= minMoves) return;
+            
+            // 移除最后一步
+            gameState.moveHistory.pop();
+            gameState.boardHistory.pop();
+            
+            // 恢复棋盘状态
+            if (gameState.boardHistory.length > 0) {
+                gameState.board = JSON.parse(JSON.stringify(gameState.boardHistory[gameState.boardHistory.length - 1]));
+            } else {
+                gameState.board = Array(15).fill().map(() => Array(15).fill(0));
+            }
+            
+            // 更新游戏状态
+            gameState.gameOver = false;
+            gameState.currentPlayer = gameState.moveHistory.length % 2 === 0 ? 1 : 2;
+            gameState.lastMove = gameState.moveHistory.length > 0 ? 
+                gameState.moveHistory[gameState.moveHistory.length - 1] : null;
+            
+            document.getElementById('status').textContent = gameState.currentPlayer === 1 ? 
+                '你的回合(黑棋)' : 'AI思考中...';
+            
+            updateBoardDisplay();
+            updateMoveHistoryDisplay();
+        }
+
+        // 更新走棋历史显示
+        function updateMoveHistoryDisplay() {
+            const moveHistoryElement = document.getElementById('moveHistory');
+            moveHistoryElement.innerHTML = '';
+            
+            gameState.moveHistory.forEach((move, index) => {
+                const moveBtn = document.createElement('button');
+                moveBtn.className = 'secondary';
+                moveBtn.textContent = `${index + 1}. ${String.fromCharCode(65 + move.col)}${15 - move.row}`;
+                moveBtn.title = `${move.player === 1 ? '黑棋' : '白棋'}走这里`;
+                moveBtn.addEventListener('click', () => revertToMove(index));
+                moveHistoryElement.appendChild(moveBtn);
+            });
+        }
+
+        // 回退到指定步数
+        function revertToMove(moveIndex) {
+            if (gameState.isTraining || gameState.isAIBattle) return;
+            
+            // 更新历史记录
+            gameState.moveHistory = gameState.moveHistory.slice(0, moveIndex + 1);
+            gameState.boardHistory = gameState.boardHistory.slice(0, moveIndex + 1);
+            
+            // 恢复棋盘状态
+            gameState.board = JSON.parse(JSON.stringify(gameState.boardHistory[moveIndex]));
+            
+            // 更新游戏状态
+            gameState.gameOver = false;
+            gameState.currentPlayer = (moveIndex + 1) % 2 === 0 ? 1 : 2;
+            gameState.lastMove = gameState.moveHistory[moveIndex];
+            
+            document.getElementById('status').textContent = gameState.currentPlayer === 1 ? 
+                '你的回合(黑棋)' : 'AI思考中...';
+            
+            updateBoardDisplay();
+            updateMoveHistoryDisplay();
+        }
+
+        // 调整模式权重（学习功能）
+        function adjustPatternWeights(isWin) {
+            const learningRate = 0.1; // 学习率
+            const gamesToAnalyze = isWin ? 
+                gameState.learningData.wins.slice(-10) : 
+                gameState.learningData.losses.slice(-10);
+            
+            gamesToAnalyze.forEach(game => {
+                // 分析获胜/失败方的模式出现频率
+                const patternCounts = {
+                    OPEN_FOUR: 0,
+                    HALF_OPEN_FOUR: 0,
+                    OPEN_THREE: 0,
+                    HALF_OPEN_THREE: 0,
+                    OPEN_TWO: 0,
+                    HALF_OPEN_TWO: 0,
+                    OPEN_ONE: 0,
+                    HALF_OPEN_ONE: 0
+                };
+                
+                // 统计获胜/失败方的模式
+                const player = isWin ? 2 : 1; // 获胜方是AI(2)，失败方是玩家(1)
+                game.moves.forEach(move => {
+                    if (move.player === player) {
+                        const patterns = getPatternsAt(move.row, move.col, player, true);
+                        patterns.forEach(pattern => {
+                            if (patternCounts.hasOwnProperty(pattern.type)) {
+                                patternCounts[pattern.type]++;
+                            }
+                        });
+                    }
+                });
+                
+                // 调整权重
+                Object.keys(patternCounts).forEach(type => {
+                    const change = patternCounts[type] * learningRate * (isWin ? 1 : -1);
+                    gameState.learningData.patternWeights[type] = Math.max(1, 
+                        gameState.learningData.patternWeights[type] + change);
+                    
+                    // 更新PATTERNS中的权重
+                    if (PATTERNS[type]) {
+                        PATTERNS[type].score = gameState.learningData.patternWeights[type];
+                    }
+                });
+            });
         }
 
         // AI走棋
@@ -381,11 +579,11 @@
             
             if (move) {
                 makeMove(move.row, move.col, 2);
-                
-                // 如果是AI对战模式，继续下一步
-                if (gameState.isAIBattle && !gameState.gameOver) {
-                    setTimeout(() => aiMove(), 100);
-                }
+            }
+            
+            // 如果是AI对战模式，继续下一步
+            if (gameState.isAIBattle && !gameState.gameOver) {
+                setTimeout(() => aiMove(), 100);
             }
         }
 
@@ -450,7 +648,7 @@
                         offensiveScore,
                         defensiveScore,
                         totalScore,
-                        patterns: getPatternsAt(row, col, player)
+                        patterns: getPatternsAt(row, col, player, true).map(p => p.name).join(', ')
                     });
                 }
                 
@@ -623,16 +821,20 @@
             return totalScore;
         }
 
-        // 获取某个位置的所有模式
-        function getPatternsAt(row, col, player) {
+        // 获取某个位置的所有模式（返回完整模式对象）
+        function getPatternsAt(row, col, player, returnObjects = false) {
             const patterns = [];
             
             for (const dir of DIRECTIONS) {
                 const pattern = getPattern(row, col, player, dir.dr, dir.dc);
-                patterns.push(pattern.name);
+                if (returnObjects) {
+                    patterns.push(pattern);
+                } else {
+                    patterns.push(pattern.name);
+                }
             }
             
-            return patterns.join(', ');
+            return patterns;
         }
 
         // 获取特定方向的模式
@@ -712,7 +914,7 @@
                 if (openEnds >= 1) return PATTERNS.HALF_OPEN_ONE;
             }
             
-            return { score: 0, name: '无' };
+            return { score: 0, name: '无', type: 'NONE' };
         }
 
         // 检查是否获胜
@@ -837,8 +1039,29 @@
             gameState.learningData = { 
                 wins: [], 
                 losses: [], 
-                aiBattleStats: { ai1Wins: 0, ai2Wins: 0, draws: 0 } 
+                aiBattleStats: { ai1Wins: 0, ai2Wins: 0, draws: 0 },
+                patternWeights: {
+                    OPEN_FOUR: 10000,
+                    HALF_OPEN_FOUR: 5000,
+                    OPEN_THREE: 2000,
+                    HALF_OPEN_THREE: 500,
+                    OPEN_TWO: 200,
+                    HALF_OPEN_TWO: 50,
+                    OPEN_ONE: 10,
+                    HALF_OPEN_ONE: 1
+                }
             };
+            
+            // 更新PATTERNS中的权重
+            PATTERNS.OPEN_FOUR.score = 10000;
+            PATTERNS.HALF_OPEN_FOUR.score = 5000;
+            PATTERNS.OPEN_THREE.score = 2000;
+            PATTERNS.HALF_OPEN_THREE.score = 500;
+            PATTERNS.OPEN_TWO.score = 200;
+            PATTERNS.HALF_OPEN_TWO.score = 50;
+            PATTERNS.OPEN_ONE.score = 10;
+            PATTERNS.HALF_OPEN_ONE.score = 1;
+            
             saveLearningData();
             updateAIBattleStats();
             addLogEntry('学习数据已清除', 'system');
@@ -851,12 +1074,15 @@
             gameState.board = Array(15).fill().map(() => Array(15).fill(0));
             gameState.gameOver = false;
             gameState.lastMove = null;
+            gameState.moveHistory = [];
+            gameState.boardHistory = [];
             
             const firstPlayer = document.getElementById('firstPlayer').value;
             gameState.currentPlayer = firstPlayer === 'human' ? 1 : 2;
             
             document.getElementById('status').textContent = firstPlayer === 'human' ? '你的回合(黑棋)' : 'AI思考中...';
             updateBoardDisplay();
+            updateMoveHistoryDisplay();
             
             if (firstPlayer === 'ai') {
                 setTimeout(() => aiMove(), 300);
@@ -878,6 +1104,7 @@
             document.getElementById('newGame').disabled = true;
             document.getElementById('startTraining').disabled = true;
             document.getElementById('startAIBattle').disabled = true;
+            document.getElementById('undoMove').disabled = true;
             
             // 开始训练
             trainingStep();
@@ -893,6 +1120,7 @@
                 document.getElementById('newGame').disabled = false;
                 document.getElementById('startTraining').disabled = false;
                 document.getElementById('startAIBattle').disabled = false;
+                document.getElementById('undoMove').disabled = false;
                 
                 return;
             }
@@ -901,6 +1129,8 @@
             gameState.board = Array(15).fill().map(() => Array(15).fill(0));
             gameState.gameOver = false;
             gameState.lastMove = null;
+            gameState.moveHistory = [];
+            gameState.boardHistory = [];
             gameState.currentPlayer = Math.random() < 0.5 ? 1 : 2; // 随机先手
             
             // 更新状态
@@ -950,12 +1180,14 @@
             
             gameState.isAIBattle = true;
             gameState.trainingQueue = games;
+            gameState.aiBattlePlayers = [1, 2]; // 两个AI玩家
             document.getElementById('status').textContent = `AI对战中 (0/${games})`;
             
             // 禁用控制按钮
             document.getElementById('newGame').disabled = true;
             document.getElementById('startTraining').disabled = true;
             document.getElementById('startAIBattle').disabled = true;
+            document.getElementById('undoMove').disabled = true;
             
             // 开始对战
             aiBattleStep();
@@ -971,56 +1203,28 @@
                 document.getElementById('newGame').disabled = false;
                 document.getElementById('startTraining').disabled = false;
                 document.getElementById('startAIBattle').disabled = false;
-                
+                document.getElementById('undoMove').disabled = false;
                 return;
             }
             
-            // 设置对战游戏
+            // 重置棋盘
             gameState.board = Array(15).fill().map(() => Array(15).fill(0));
             gameState.gameOver = false;
             gameState.lastMove = null;
+            gameState.moveHistory = [];
+            gameState.boardHistory = [];
             gameState.currentPlayer = Math.random() < 0.5 ? 1 : 2; // 随机先手
             
             // 更新状态
             const totalGames = parseInt(document.getElementById('aiBattleGames').value);
             const completedGames = totalGames - gameState.trainingQueue;
             document.getElementById('status').textContent = `AI对战中 (${completedGames}/${totalGames})`;
+            updateBoardDisplay();
             
-            // 开始游戏
+            // 开始AI对战
             setTimeout(() => {
                 aiMove();
-                aiBattleNextStep();
-            }, 10);
-        }
-
-        // AI对战下一步
-        function aiBattleNextStep() {
-            if (!gameState.gameOver) {
-                setTimeout(() => {
-                    aiMove();
-                    aiBattleNextStep();
-                }, 10);
-            } else {
-                // 记录游戏结果
-                if (gameState.lastMove) {
-                    if (gameState.lastMove.player === 1) {
-                        gameState.learningData.aiBattleStats.ai1Wins++;
-                        addLogEntry(`对战局 ${parseInt(document.getElementById('aiBattleGames').value) - gameState.trainingQueue + 1}: AI1(黑) 获胜`, 'win');
-                    } else {
-                        gameState.learningData.aiBattleStats.ai2Wins++;
-                        addLogEntry(`对战局 ${parseInt(document.getElementById('aiBattleGames').value) - gameState.trainingQueue + 1}: AI2(白) 获胜`, 'loss');
-                    }
-                } else {
-                    gameState.learningData.aiBattleStats.draws++;
-                    addLogEntry(`对战局 ${parseInt(document.getElementById('aiBattleGames').value) - gameState.trainingQueue + 1}: 平局`, 'draw');
-                }
-                
-                updateAIBattleStats();
-                saveLearningData();
-                
-                gameState.trainingQueue--;
-                setTimeout(aiBattleStep, 10);
-            }
+            }, 100);
         }
 
         // 更新AI对战统计
@@ -1056,6 +1260,7 @@
             
             // 事件监听器
             document.getElementById('newGame').addEventListener('click', newGame);
+            document.getElementById('undoMove').addEventListener('click', undoMove);
             document.getElementById('clearData').addEventListener('click', clearLearningData);
             document.getElementById('toggleDebug').addEventListener('click', () => {
                 gameState.debugMode = !gameState.debugMode;
