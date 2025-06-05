@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ÖÇÄÜÎå×ÓÆå</title>
+    <title>æ™ºèƒ½äº”å­æ£‹</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -106,30 +106,30 @@
     </style>
 </head>
 <body>
-    <h1>ÖÇÄÜÎå×ÓÆå</h1>
+    <h1>æ™ºèƒ½äº”å­æ£‹</h1>
     <div class="controls">
-        <button id="newGame">ĞÂÓÎÏ·</button>
-        <button id="clearData">Çå³ıÑ§Ï°Êı¾İ</button>
-        <button id="toggleDebug">ÏÔÊ¾µ÷ÊÔĞÅÏ¢</button>
+        <button id="newGame">æ–°æ¸¸æˆ</button>
+        <button id="clearData">æ¸…é™¤å­¦ä¹ æ•°æ®</button>
+        <button id="toggleDebug">æ˜¾ç¤ºè°ƒè¯•ä¿¡æ¯</button>
         <select id="aiLevel">
-            <option value="1">³õ¼¶</option>
-            <option value="2" selected>ÖĞ¼¶</option>
-            <option value="3">¸ß¼¶</option>
+            <option value="1">åˆçº§</option>
+            <option value="2" selected>ä¸­çº§</option>
+            <option value="3">é«˜çº§</option>
         </select>
     </div>
     <div id="board"></div>
     <div id="status"></div>
     <div id="debugInfo" class="debug-info hidden">
-        <h3>AI¾ö²ßĞÅÏ¢</h3>
+        <h3>AIå†³ç­–ä¿¡æ¯</h3>
         <div id="aiThinking"></div>
         <table class="score-table">
             <thead>
                 <tr>
-                    <th>Î»ÖÃ</th>
-                    <th>½ø¹¥·Ö</th>
-                    <th>·ÀÊØ·Ö</th>
-                    <th>×Ü·Ö</th>
-                    <th>Ä£Ê½</th>
+                    <th>ä½ç½®</th>
+                    <th>è¿›æ”»åˆ†</th>
+                    <th>é˜²å®ˆåˆ†</th>
+                    <th>æ€»åˆ†</th>
+                    <th>æ¨¡å¼</th>
                 </tr>
             </thead>
             <tbody id="scoreDetails">
@@ -138,10 +138,10 @@
     </div>
 
     <script>
-        // ÓÎÏ·×´Ì¬
+        // æ¸¸æˆçŠ¶æ€
         const gameState = {
-            board: Array(15).fill().map(() => Array(15).fill(0)), // 0=¿Õ, 1=ºÚ, 2=°×
-            currentPlayer: 1, // 1=Íæ¼Ò(ºÚ), 2=AI(°×)
+            board: Array(15).fill().map(() => Array(15).fill(0)), // 0=ç©º, 1=é»‘, 2=ç™½
+            currentPlayer: 1, // 1=ç©å®¶(é»‘), 2=AI(ç™½)
             gameOver: false,
             lastMove: null,
             learningData: JSON.parse(localStorage.getItem('gomokuLearningData')) || {
@@ -151,28 +151,28 @@
             debugMode: false
         };
 
-        // Ä£Ê½¶¨Òå
+        // æ¨¡å¼å®šä¹‰
         const PATTERNS = {
-            FIVE: { score: 100000, name: 'ÎåÁ¬' },
-            OPEN_FOUR: { score: 10000, name: '»îËÄ' },
-            HALF_OPEN_FOUR: { score: 1000, name: '³åËÄ' },
-            OPEN_THREE: { score: 1000, name: '»îÈı' },
-            HALF_OPEN_THREE: { score: 100, name: 'ÃßÈı' },
-            OPEN_TWO: { score: 100, name: '»î¶ş' },
-            HALF_OPEN_TWO: { score: 10, name: 'Ãß¶ş' },
-            OPEN_ONE: { score: 10, name: '»îÒ»' },
-            HALF_OPEN_ONE: { score: 1, name: 'ÃßÒ»' }
+            FIVE: { score: 100000, name: 'äº”è¿' },
+            OPEN_FOUR: { score: 10000, name: 'æ´»å››' },
+            HALF_OPEN_FOUR: { score: 1000, name: 'å†²å››' },
+            OPEN_THREE: { score: 1000, name: 'æ´»ä¸‰' },
+            HALF_OPEN_THREE: { score: 100, name: 'çœ ä¸‰' },
+            OPEN_TWO: { score: 100, name: 'æ´»äºŒ' },
+            HALF_OPEN_TWO: { score: 10, name: 'çœ äºŒ' },
+            OPEN_ONE: { score: 10, name: 'æ´»ä¸€' },
+            HALF_OPEN_ONE: { score: 1, name: 'çœ ä¸€' }
         };
 
-        // ·½ÏòÏòÁ¿
+        // æ–¹å‘å‘é‡
         const DIRECTIONS = [
-            { dr: 1, dc: 0 },  // ´¹Ö±
-            { dr: 0, dc: 1 },   // Ë®Æ½
-            { dr: 1, dc: 1 },   // ¶Ô½ÇÏß
-            { dr: 1, dc: -1 }   // ·´¶Ô½ÇÏß
+            { dr: 1, dc: 0 },  // å‚ç›´
+            { dr: 0, dc: 1 },   // æ°´å¹³
+            { dr: 1, dc: 1 },   // å¯¹è§’çº¿
+            { dr: 1, dc: -1 }   // åå¯¹è§’çº¿
         ];
 
-        // ³õÊ¼»¯ÆåÅÌ
+        // åˆå§‹åŒ–æ£‹ç›˜
         function initBoard() {
             const boardElement = document.getElementById('board');
             boardElement.innerHTML = '';
@@ -193,7 +193,7 @@
             updateBoardDisplay();
         }
 
-        // ´¦Àíµã»÷ÊÂ¼ş
+        // å¤„ç†ç‚¹å‡»äº‹ä»¶
         function handleCellClick(row, col) {
             if (gameState.gameOver || gameState.currentPlayer !== 1 || gameState.board[row][col] !== 0) {
                 return;
@@ -206,7 +206,7 @@
             }
         }
 
-        // Ö´ĞĞÂä×Ó
+        // æ‰§è¡Œè½å­
         function makeMove(row, col, player) {
             gameState.board[row][col] = player;
             gameState.lastMove = { row, col, player };
@@ -216,15 +216,15 @@
             
             if (checkWin(row, col, player)) {
                 gameState.gameOver = true;
-                document.getElementById('status').textContent = player === 1 ? 'ÄãÓ®ÁË!' : 'AIÓ®ÁË!';
+                document.getElementById('status').textContent = player === 1 ? 'ä½ èµ¢äº†!' : 'AIèµ¢äº†!';
                 
-                // ¼ÇÂ¼Ñ§Ï°Êı¾İ
-                if (player === 2) { // AIÓ®ÁË
+                // è®°å½•å­¦ä¹ æ•°æ®
+                if (player === 2) { // AIèµ¢äº†
                     gameState.learningData.wins.push(JSON.parse(JSON.stringify(gameState.board)));
                     if (gameState.learningData.wins.length > 100) {
                         gameState.learningData.wins.shift();
                     }
-                } else { // Íæ¼ÒÓ®ÁË
+                } else { // ç©å®¶èµ¢äº†
                     gameState.learningData.losses.push(JSON.parse(JSON.stringify(gameState.board)));
                     if (gameState.learningData.losses.length > 100) {
                         gameState.learningData.losses.shift();
@@ -233,11 +233,11 @@
                 saveLearningData();
             } else if (isBoardFull()) {
                 gameState.gameOver = true;
-                document.getElementById('status').textContent = 'Æ½¾Ö!';
+                document.getElementById('status').textContent = 'å¹³å±€!';
             }
         }
 
-        // AI×ßÆå
+        // AIèµ°æ£‹
         function aiMove() {
             if (gameState.gameOver || gameState.currentPlayer !== 2) return;
             
@@ -249,7 +249,7 @@
             } else if (aiLevel === 2) {
                 move = findBestMove(2);
             } else {
-                move = findBestMove(2, true); // ¸ß¼¶Ä£Ê½Ê¹ÓÃ¸üÉîµÄËÑË÷
+                move = findBestMove(2, true); // é«˜çº§æ¨¡å¼ä½¿ç”¨æ›´æ·±çš„æœç´¢
             }
             
             if (move) {
@@ -257,7 +257,7 @@
             }
         }
 
-        // Ëæ»ú×ßÆå£¨³õ¼¶AI£©
+        // éšæœºèµ°æ£‹ï¼ˆåˆçº§AIï¼‰
         function findRandomMove() {
             const emptyCells = [];
             
@@ -271,7 +271,7 @@
             
             if (emptyCells.length === 0) return null;
             
-            // ÓÅÏÈÑ¡ÔñÖĞĞÄÇøÓò
+            // ä¼˜å…ˆé€‰æ‹©ä¸­å¿ƒåŒºåŸŸ
             const centerCells = emptyCells.filter(cell => {
                 const distToCenter = Math.sqrt(Math.pow(cell.row - 7, 2) + Math.pow(cell.col - 7, 2));
                 return distToCenter < 5;
@@ -281,13 +281,13 @@
             return candidates[Math.floor(Math.random() * candidates.length)];
         }
 
-        // Ñ°ÕÒ×î¼Ñ×ßÆå£¨ÖĞ¼¶/¸ß¼¶AI£©
+        // å¯»æ‰¾æœ€ä½³èµ°æ£‹ï¼ˆä¸­çº§/é«˜çº§AIï¼‰
         function findBestMove(player, advanced = false) {
             const opponent = player === 1 ? 2 : 1;
             const emptyCells = getEmptyCellsNearOccupied();
             
             if (emptyCells.length === 0) {
-                // Èç¹ûÃ»ÓĞÁÚ½üµÄ¿ÕÎ»£¬Ñ¡ÔñÖĞĞÄ»òËæ»úÎ»ÖÃ
+                // å¦‚æœæ²¡æœ‰é‚»è¿‘çš„ç©ºä½ï¼Œé€‰æ‹©ä¸­å¿ƒæˆ–éšæœºä½ç½®
                 return findRandomMove();
             }
             
@@ -295,22 +295,22 @@
             let bestMoves = [];
             const scores = [];
             
-            // ÆÀ¹ÀÃ¿¸ö¿ÕÎ»µÄ·ÖÊı
+            // è¯„ä¼°æ¯ä¸ªç©ºä½çš„åˆ†æ•°
             for (const cell of emptyCells) {
                 const { row, col } = cell;
                 let offensiveScore = 0;
                 let defensiveScore = 0;
                 
-                // ½ø¹¥·ÖÊı£¨Èç¹ûAIÔÚ´ËÂä×Ó£©
+                // è¿›æ”»åˆ†æ•°ï¼ˆå¦‚æœAIåœ¨æ­¤è½å­ï¼‰
                 offensiveScore = evaluatePosition(row, col, player);
                 
-                // ·ÀÊØ·ÖÊı£¨Èç¹û¶ÔÊÖÔÚ´ËÂä×Ó£©
+                // é˜²å®ˆåˆ†æ•°ï¼ˆå¦‚æœå¯¹æ‰‹åœ¨æ­¤è½å­ï¼‰
                 defensiveScore = evaluatePosition(row, col, opponent);
                 
-                // ×Ü·Ö = ½ø¹¥·Ö + ·ÀÊØ·Ö * 0.8 (·ÀÊØÉÔÈõÓÚ½ø¹¥)
+                // æ€»åˆ† = è¿›æ”»åˆ† + é˜²å®ˆåˆ† * 0.8 (é˜²å®ˆç¨å¼±äºè¿›æ”»)
                 const totalScore = offensiveScore + defensiveScore * 0.8;
                 
-                // ¼ÇÂ¼ÆÀ·ÖÏêÇéÓÃÓÚµ÷ÊÔ
+                // è®°å½•è¯„åˆ†è¯¦æƒ…ç”¨äºè°ƒè¯•
                 scores.push({
                     position: `${String.fromCharCode(65 + col)}${15 - row}`,
                     row,
@@ -321,7 +321,7 @@
                     patterns: getPatternsAt(row, col, player)
                 });
                 
-                // ¸üĞÂ×î¼Ñ×ßÆå
+                // æ›´æ–°æœ€ä½³èµ°æ£‹
                 if (totalScore > bestScore) {
                     bestScore = totalScore;
                     bestMoves = [{ row, col }];
@@ -330,12 +330,12 @@
                 }
             }
             
-            // ÏÔÊ¾µ÷ÊÔĞÅÏ¢
+            // æ˜¾ç¤ºè°ƒè¯•ä¿¡æ¯
             if (gameState.debugMode) {
                 displayDebugInfo(scores, bestScore);
             }
             
-            // Èç¹ûÓĞ¶à¸ö×î¼ÑÑ¡Ôñ£¬ÓÅÏÈÑ¡ÔñÖĞĞÄ¸½½üµÄ
+            // å¦‚æœæœ‰å¤šä¸ªæœ€ä½³é€‰æ‹©ï¼Œä¼˜å…ˆé€‰æ‹©ä¸­å¿ƒé™„è¿‘çš„
             if (bestMoves.length > 1) {
                 bestMoves.sort((a, b) => {
                     const distA = Math.sqrt(Math.pow(a.row - 7, 2) + Math.pow(a.col - 7, 2));
@@ -344,10 +344,10 @@
                 });
             }
             
-            // ¸ß¼¶AI»á¿¼ÂÇ¸üÉîµÄËÑË÷
+            // é«˜çº§AIä¼šè€ƒè™‘æ›´æ·±çš„æœç´¢
             if (advanced && bestScore < PATTERNS.FIVE.score / 2) {
-                // Èç¹ûÃ»ÓĞÁ¢¼´»ñÊ¤»ò·ÀÊØµÄ±ØÒª£¬½øĞĞ¸üÉîµÄËÑË÷
-                const deepMove = findDeepMove(player, 2); // ËÑË÷Éî¶ÈÎª2
+                // å¦‚æœæ²¡æœ‰ç«‹å³è·èƒœæˆ–é˜²å®ˆçš„å¿…è¦ï¼Œè¿›è¡Œæ›´æ·±çš„æœç´¢
+                const deepMove = findDeepMove(player, 2); // æœç´¢æ·±åº¦ä¸º2
                 if (deepMove) {
                     return deepMove;
                 }
@@ -356,14 +356,14 @@
             return bestMoves[0];
         }
 
-        // Éî¶ÈËÑË÷£¨¸ß¼¶AI£©
+        // æ·±åº¦æœç´¢ï¼ˆé«˜çº§AIï¼‰
         function findDeepMove(player, depth) {
             if (depth === 0) return null;
             
             const opponent = player === 1 ? 2 : 1;
             const emptyCells = getEmptyCellsNearOccupied();
             
-            // ÏŞÖÆËÑË÷·¶Î§ÒÔÌá¸ßĞÔÄÜ
+            // é™åˆ¶æœç´¢èŒƒå›´ä»¥æé«˜æ€§èƒ½
             const candidates = emptyCells.slice(0, 20);
             
             let bestScore = -Infinity;
@@ -372,16 +372,16 @@
             for (const cell of candidates) {
                 const { row, col } = cell;
                 
-                // Ä£ÄâÂä×Ó
+                // æ¨¡æ‹Ÿè½å­
                 gameState.board[row][col] = player;
                 
-                // ¼ì²éÊÇ·ñÖ±½Ó»ñÊ¤
+                // æ£€æŸ¥æ˜¯å¦ç›´æ¥è·èƒœ
                 if (checkWin(row, col, player)) {
-                    gameState.board[row][col] = 0; // ³·ÏúÄ£Äâ
+                    gameState.board[row][col] = 0; // æ’¤é”€æ¨¡æ‹Ÿ
                     return { row, col };
                 }
                 
-                // ÆÀ¹À¶ÔÊÖµÄ×î¼Ñ»ØÓ¦
+                // è¯„ä¼°å¯¹æ‰‹çš„æœ€ä½³å›åº”
                 let opponentBestScore = -Infinity;
                 const opponentEmptyCells = getEmptyCellsNearOccupied();
                 
@@ -392,16 +392,16 @@
                     }
                 }
                 
-                // ¼ÆËã¾»µÃ·Ö
+                // è®¡ç®—å‡€å¾—åˆ†
                 const currentScore = evaluatePosition(row, col, player) - opponentBestScore * 0.7;
                 
-                // µİ¹éËÑË÷
+                // é€’å½’æœç´¢
                 if (depth > 1) {
                     const deepMove = findDeepMove(player, depth - 1);
                     if (deepMove) {
                         const deepScore = evaluatePosition(deepMove.row, deepMove.col, player);
                         if (deepScore > currentScore) {
-                            gameState.board[row][col] = 0; // ³·ÏúÄ£Äâ
+                            gameState.board[row][col] = 0; // æ’¤é”€æ¨¡æ‹Ÿ
                             continue;
                         }
                     }
@@ -412,13 +412,13 @@
                     bestMove = { row, col };
                 }
                 
-                gameState.board[row][col] = 0; // ³·ÏúÄ£Äâ
+                gameState.board[row][col] = 0; // æ’¤é”€æ¨¡æ‹Ÿ
             }
             
             return bestMove;
         }
 
-        // »ñÈ¡ÆåÅÌÉÏËùÓĞ¿ÕÎ»£¨½öÏŞÁÚ½üÒÑÓĞÆå×ÓµÄÎ»ÖÃ£©
+        // è·å–æ£‹ç›˜ä¸Šæ‰€æœ‰ç©ºä½ï¼ˆä»…é™é‚»è¿‘å·²æœ‰æ£‹å­çš„ä½ç½®ï¼‰
         function getEmptyCellsNearOccupied() {
             const emptyCells = [];
             const checked = Array(15).fill().map(() => Array(15).fill(false));
@@ -426,7 +426,7 @@
             for (let r = 0; r < 15; r++) {
                 for (let c = 0; c < 15; c++) {
                     if (gameState.board[r][c] !== 0) {
-                        // ¼ì²éÖÜÎ§2¸ñÄÚµÄ¿ÕÎ»
+                        // æ£€æŸ¥å‘¨å›´2æ ¼å†…çš„ç©ºä½
                         for (let dr = -2; dr <= 2; dr++) {
                             for (let dc = -2; dc <= 2; dc++) {
                                 const nr = r + dr;
@@ -443,7 +443,7 @@
                 }
             }
             
-            // Èç¹ûÃ»ÓĞÁÚ½üµÄ¿ÕÎ»£¬·µ»ØËùÓĞ¿ÕÎ»
+            // å¦‚æœæ²¡æœ‰é‚»è¿‘çš„ç©ºä½ï¼Œè¿”å›æ‰€æœ‰ç©ºä½
             if (emptyCells.length === 0) {
                 for (let r = 0; r < 15; r++) {
                     for (let c = 0; c < 15; c++) {
@@ -457,32 +457,32 @@
             return emptyCells;
         }
 
-        // ÆÀ¹ÀÄ³¸öÎ»ÖÃµÄ·ÖÊı
+        // è¯„ä¼°æŸä¸ªä½ç½®çš„åˆ†æ•°
         function evaluatePosition(row, col, player) {
             if (gameState.board[row][col] !== 0) return -Infinity;
             
             let totalScore = 0;
             const patterns = [];
             
-            // ¼ì²éËÄ¸ö·½Ïò
+            // æ£€æŸ¥å››ä¸ªæ–¹å‘
             for (const dir of DIRECTIONS) {
                 const pattern = getPattern(row, col, player, dir.dr, dir.dc);
                 patterns.push(pattern);
                 totalScore += pattern.score;
             }
             
-            // ÌØÊâÄ£Ê½¼Ó·Ö£¨ÈçË«»îÈı¡¢»îËÄ+»îÈıµÈ£©
+            // ç‰¹æ®Šæ¨¡å¼åŠ åˆ†ï¼ˆå¦‚åŒæ´»ä¸‰ã€æ´»å››+æ´»ä¸‰ç­‰ï¼‰
             if (patterns.filter(p => p.type === 'OPEN_FOUR').length >= 1) {
-                totalScore += PATTERNS.OPEN_FOUR.score * 0.5; // ¶îÍâ¼Ó·Ö
+                totalScore += PATTERNS.OPEN_FOUR.score * 0.5; // é¢å¤–åŠ åˆ†
             }
             if (patterns.filter(p => p.type === 'OPEN_THREE').length >= 2) {
-                totalScore += PATTERNS.OPEN_THREE.score * 1.5; // Ë«»îÈı¼Ó·Ö
+                totalScore += PATTERNS.OPEN_THREE.score * 1.5; // åŒæ´»ä¸‰åŠ åˆ†
             }
             if (patterns.filter(p => p.type === 'HALF_OPEN_FOUR').length >= 2) {
-                totalScore += PATTERNS.HALF_OPEN_FOUR.score * 1.2; // Ë«³åËÄ¼Ó·Ö
+                totalScore += PATTERNS.HALF_OPEN_FOUR.score * 1.2; // åŒå†²å››åŠ åˆ†
             }
             
-            // ÖĞĞÄÎ»ÖÃ¼Ó·Ö£¨¿ª¾ÖÊ±¸üÖØÒª£©
+            // ä¸­å¿ƒä½ç½®åŠ åˆ†ï¼ˆå¼€å±€æ—¶æ›´é‡è¦ï¼‰
             const centerDist = Math.sqrt(Math.pow(row - 7, 2) + Math.pow(col - 7, 2));
             const centerBonus = 20 / (1 + centerDist);
             totalScore += centerBonus;
@@ -490,7 +490,7 @@
             return totalScore;
         }
 
-        // »ñÈ¡Ä³¸öÎ»ÖÃµÄËùÓĞÄ£Ê½
+        // è·å–æŸä¸ªä½ç½®çš„æ‰€æœ‰æ¨¡å¼
         function getPatternsAt(row, col, player) {
             const patterns = [];
             
@@ -502,15 +502,15 @@
             return patterns.join(', ');
         }
 
-        // »ñÈ¡ÌØ¶¨·½ÏòµÄÄ£Ê½
+        // è·å–ç‰¹å®šæ–¹å‘çš„æ¨¡å¼
         function getPattern(row, col, player, dr, dc) {
-            // Ä£ÄâÂä×Ó
+            // æ¨¡æ‹Ÿè½å­
             gameState.board[row][col] = player;
             
             let maxLength = 1;
             let openEnds = 0;
             
-            // ¼ì²éÕı·½Ïò
+            // æ£€æŸ¥æ­£æ–¹å‘
             let length = 1;
             let r = row + dr;
             let c = col + dc;
@@ -531,10 +531,10 @@
             if (!blocked && r >= 0 && r < 15 && c >= 0 && c < 15) {
                 if (gameState.board[r][c] === 0) openEnds++;
             } else if (!blocked) {
-                // µ½´ïÆåÅÌ±ßÔµ
+                // åˆ°è¾¾æ£‹ç›˜è¾¹ç¼˜
             }
             
-            // ¼ì²é·´·½Ïò
+            // æ£€æŸ¥åæ–¹å‘
             r = row - dr;
             c = col - dc;
             blocked = false;
@@ -554,15 +554,15 @@
             if (!blocked && r >= 0 && r < 15 && c >= 0 && c < 15) {
                 if (gameState.board[r][c] === 0) openEnds++;
             } else if (!blocked) {
-                // µ½´ïÆåÅÌ±ßÔµ
+                // åˆ°è¾¾æ£‹ç›˜è¾¹ç¼˜
             }
             
             maxLength = Math.max(maxLength, length);
             
-            // ³·ÏúÄ£ÄâÂä×Ó
+            // æ’¤é”€æ¨¡æ‹Ÿè½å­
             gameState.board[row][col] = 0;
             
-            // È·¶¨Ä£Ê½
+            // ç¡®å®šæ¨¡å¼
             if (maxLength >= 5) {
                 return PATTERNS.FIVE;
             } else if (maxLength === 4) {
@@ -579,15 +579,15 @@
                 if (openEnds >= 1) return PATTERNS.HALF_OPEN_ONE;
             }
             
-            return { score: 0, name: 'ÎŞ' };
+            return { score: 0, name: 'æ— ' };
         }
 
-        // ¼ì²éÊÇ·ñ»ñÊ¤
+        // æ£€æŸ¥æ˜¯å¦è·èƒœ
         function checkWin(row, col, player) {
             for (const dir of DIRECTIONS) {
                 let count = 1;
                 
-                // Õı·½Ïò
+                // æ­£æ–¹å‘
                 let r = row + dir.dr;
                 let c = col + dir.dc;
                 while (r >= 0 && r < 15 && c >= 0 && c < 15 && gameState.board[r][c] === player) {
@@ -596,7 +596,7 @@
                     c += dir.dc;
                 }
                 
-                // ·´·½Ïò
+                // åæ–¹å‘
                 r = row - dir.dr;
                 c = col - dir.dc;
                 while (r >= 0 && r < 15 && c >= 0 && c < 15 && gameState.board[r][c] === player) {
@@ -613,7 +613,7 @@
             return false;
         }
 
-        // ¼ì²éÆåÅÌÊÇ·ñÒÑÂú
+        // æ£€æŸ¥æ£‹ç›˜æ˜¯å¦å·²æ»¡
         function isBoardFull() {
             for (let r = 0; r < 15; r++) {
                 for (let c = 0; c < 15; c++) {
@@ -625,7 +625,7 @@
             return true;
         }
 
-        // ¸üĞÂÆåÅÌÏÔÊ¾
+        // æ›´æ–°æ£‹ç›˜æ˜¾ç¤º
         function updateBoardDisplay() {
             const cells = document.querySelectorAll('.cell');
             
@@ -653,23 +653,23 @@
             }
         }
 
-        // ÏÔÊ¾µ÷ÊÔĞÅÏ¢
+        // æ˜¾ç¤ºè°ƒè¯•ä¿¡æ¯
         function displayDebugInfo(scores, bestScore) {
             const debugInfo = document.getElementById('debugInfo');
             const aiThinking = document.getElementById('aiThinking');
             const scoreDetails = document.getElementById('scoreDetails');
             
             aiThinking.innerHTML = `
-                <p>AIÕıÔÚË¼¿¼£¬ÆÀ¹ÀÁË ${scores.length} ¸ö¿ÉÄÜµÄÎ»ÖÃ</p>
-                <p>×î¼Ñ·ÖÊı: ${bestScore.toFixed(1)}</p>
+                <p>AIæ­£åœ¨æ€è€ƒï¼Œè¯„ä¼°äº† ${scores.length} ä¸ªå¯èƒ½çš„ä½ç½®</p>
+                <p>æœ€ä½³åˆ†æ•°: ${bestScore.toFixed(1)}</p>
             `;
             
             scoreDetails.innerHTML = '';
             
-            // °´×Ü·ÖÅÅĞò
+            // æŒ‰æ€»åˆ†æ’åº
             scores.sort((a, b) => b.totalScore - a.totalScore);
             
-            // Ö»ÏÔÊ¾Ç°20¸öÎ»ÖÃ
+            // åªæ˜¾ç¤ºå‰20ä¸ªä½ç½®
             const displayCount = Math.min(20, scores.length);
             
             for (let i = 0; i < displayCount; i++) {
@@ -694,19 +694,19 @@
             debugInfo.classList.remove('hidden');
         }
 
-        // ±£´æÑ§Ï°Êı¾İ
+        // ä¿å­˜å­¦ä¹ æ•°æ®
         function saveLearningData() {
             localStorage.setItem('gomokuLearningData', JSON.stringify(gameState.learningData));
         }
 
-        // Çå³ıÑ§Ï°Êı¾İ
+        // æ¸…é™¤å­¦ä¹ æ•°æ®
         function clearLearningData() {
             gameState.learningData = { wins: [], losses: [] };
             saveLearningData();
-            alert('Ñ§Ï°Êı¾İÒÑÇå³ı');
+            alert('å­¦ä¹ æ•°æ®å·²æ¸…é™¤');
         }
 
-        // ĞÂÓÎÏ·
+        // æ–°æ¸¸æˆ
         function newGame() {
             gameState.board = Array(15).fill().map(() => Array(15).fill(0));
             gameState.currentPlayer = 1;
@@ -716,7 +716,7 @@
             updateBoardDisplay();
         }
 
-        // ³õÊ¼»¯ÓÎÏ·
+        // åˆå§‹åŒ–æ¸¸æˆ
         function initGame() {
             initBoard();
             
@@ -728,7 +728,7 @@
             });
         }
 
-        // Æô¶¯ÓÎÏ·
+        // å¯åŠ¨æ¸¸æˆ
         window.onload = initGame;
     </script>
 </body>
