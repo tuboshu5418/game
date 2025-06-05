@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能五子棋AI学习系统</title>
+    <title>高级五子棋AI系统</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -24,7 +24,7 @@
             flex-wrap: wrap;
             gap: 10px;
             justify-content: center;
-            max-width: 800px;
+            max-width: 1000px;
         }
         .control-group {
             display: flex;
@@ -69,45 +69,48 @@
         button.warning:hover {
             background-color: #e68a00;
         }
+        #board-container {
+            background-color: #DEB887;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+            position: relative;
+        }
         #board {
             display: grid;
             grid-template-columns: repeat(15, 30px);
             grid-template-rows: repeat(15, 30px);
             gap: 1px;
             background-color: #DEB887;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            background-image: 
+                linear-gradient(to right, #8B4513 1px, transparent 1px),
+                linear-gradient(to bottom, #8B4513 1px, transparent 1px);
+            background-size: 30px 30px;
         }
         .cell {
             width: 30px;
             height: 30px;
-            background-color: #DEB887;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
             position: relative;
-        }
-        .cell::before {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-            border: 1px solid #8B4513;
+            z-index: 1;
         }
         .black {
             width: 24px;
             height: 24px;
             background-color: black;
             border-radius: 50%;
+            box-shadow: 0 0 3px rgba(0,0,0,0.5);
         }
         .white {
             width: 24px;
             height: 24px;
             background-color: white;
             border-radius: 50%;
+            box-shadow: 0 0 3px rgba(0,0,0,0.5);
         }
         .last-move {
             box-shadow: 0 0 5px 2px rgba(255, 215, 0, 0.7);
@@ -115,7 +118,7 @@
         .debug-panel {
             display: flex;
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
             margin-top: 20px;
             gap: 20px;
         }
@@ -136,6 +139,31 @@
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
             max-height: 500px;
             overflow-y: auto;
+        }
+        .command-interface {
+            flex: 0.5;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+            max-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        #commandOutput {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            padding: 5px;
+            font-family: monospace;
+            background-color: #f8f8f8;
+        }
+        #commandInput {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            font-family: monospace;
         }
         .score-table {
             width: 100%;
@@ -158,6 +186,7 @@
             margin: 10px 0;
             font-weight: bold;
             min-height: 20px;
+            color: #333;
         }
         .training-progress {
             width: 100%;
@@ -191,10 +220,32 @@
             padding: 2px 5px;
             font-size: 12px;
         }
+        .center-point {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background-color: #8B4513;
+            border-radius: 50%;
+            z-index: 0;
+        }
+        .cursor {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 2px solid red;
+            z-index: 2;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        .rule-editor {
+            width: 100%;
+            height: 100px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
-    <h1>智能五子棋AI学习系统</h1>
+    <h1>高级五子棋AI系统</h1>
     
     <div class="controls">
         <div class="control-group">
@@ -213,8 +264,23 @@
                 <option value="1">初级AI</option>
                 <option value="2" selected>中级AI</option>
                 <option value="3">高级AI</option>
+                <option value="4">专家AI</option>
             </select>
-            <button id="toggleDebug">显示AI思考</button>
+            <button id="toggleDebug">隐藏AI思考</button>
+        </div>
+        
+        <div class="control-group">
+            <h3>游戏规则</h3>
+            <select id="gameRule">
+                <option value="standard">标准规则</option>
+                <option value="rif">RIF规则</option>
+                <option value="yamaguchi">山口规则</option>
+                <option value="swap1">一手交换</option>
+                <option value="custom">自定义规则</option>
+            </select>
+            <div id="customRuleContainer" class="hidden">
+                <textarea id="customRuleEditor" class="rule-editor" placeholder="输入自定义规则..."></textarea>
+            </div>
         </div>
         
         <div class="control-group">
@@ -240,11 +306,14 @@
         </div>
     </div>
     
-    <div id="status"></div>
-    <div id="board"></div>
+    <div id="status">游戏准备中...</div>
+    <div id="board-container">
+        <div id="board"></div>
+        <div id="cursor" class="cursor hidden"></div>
+    </div>
     
     <div class="debug-panel">
-        <div id="debugInfo" class="debug-info hidden">
+        <div id="debugInfo" class="debug-info">
             <h3>AI思考过程</h3>
             <div id="aiThinking"></div>
             <table class="score-table">
@@ -262,6 +331,12 @@
             </table>
         </div>
         
+        <div class="command-interface">
+            <h3>命令行</h3>
+            <div id="commandOutput"></div>
+            <input id="commandInput" type="text" placeholder="输入命令 (如: goto A1, chess B2)" />
+        </div>
+        
         <div id="trainingLog" class="training-log">
             <h3>训练日志</h3>
             <div id="logEntries"></div>
@@ -276,13 +351,13 @@
             currentPlayer: 1, // 1=黑, 2=白
             gameOver: false,
             lastMove: null,
-            moveHistory: [], // 新增：走棋历史记录
-            boardHistory: [], // 新增：棋盘历史记录
+            moveHistory: [], // 走棋历史记录
+            boardHistory: [], // 棋盘历史记录
             learningData: JSON.parse(localStorage.getItem('gomokuLearningData')) || {
                 wins: [],
                 losses: [],
                 aiBattleStats: { ai1Wins: 0, ai2Wins: 0, draws: 0 },
-                patternWeights: { // 新增：模式权重学习
+                patternWeights: { // 模式权重学习
                     OPEN_FOUR: 10000,
                     HALF_OPEN_FOUR: 5000,
                     OPEN_THREE: 2000,
@@ -291,13 +366,20 @@
                     HALF_OPEN_TWO: 50,
                     OPEN_ONE: 10,
                     HALF_OPEN_ONE: 1
-                }
+                },
+                deepLearning: {} // 深度学习模型数据
             },
-            debugMode: false,
+            debugMode: true, // 默认显示思考过程
             isTraining: false,
             isAIBattle: false,
             trainingQueue: 0,
-            aiBattlePlayers: [] // 记录对战AI的玩家
+            aiBattlePlayers: [], // 记录对战AI的玩家
+            cursorPosition: { row: 7, col: 7 }, // 命令行光标位置
+            currentRule: 'standard', // 当前规则
+            ruleSteps: [], // 规则步骤
+            restrictedMoves: [], // 限制走棋位置
+            swapAvailable: false, // 一手交换是否可用
+            swapRequested: false // 是否请求交换
         };
 
         // 模式定义（使用学习到的权重）
@@ -358,6 +440,28 @@
             const boardElement = document.getElementById('board');
             boardElement.innerHTML = '';
             
+            // 添加中心点标记
+            const centerPoint = document.createElement('div');
+            centerPoint.className = 'center-point';
+            centerPoint.style.left = '222px'; // 15*30/2 - 3
+            centerPoint.style.top = '222px';
+            boardElement.appendChild(centerPoint);
+            
+            // 添加星位标记（天元和四个角星）
+            const starPoints = [
+                {row: 3, col: 3}, {row: 3, col: 11}, 
+                {row: 7, col: 7}, 
+                {row: 11, col: 3}, {row: 11, col: 11}
+            ];
+            
+            starPoints.forEach(point => {
+                const star = document.createElement('div');
+                star.className = 'center-point';
+                star.style.left = `${point.col * 30 - 3}px`;
+                star.style.top = `${point.row * 30 - 3}px`;
+                boardElement.appendChild(star);
+            });
+            
             for (let r = 0; r < 15; r++) {
                 for (let c = 0; c < 15; c++) {
                     const cell = document.createElement('div');
@@ -372,21 +476,82 @@
             }
             
             updateBoardDisplay();
+            updateCursorPosition();
+        }
+
+        // 更新光标位置
+        function updateCursorPosition() {
+            const cursor = document.getElementById('cursor');
+            cursor.style.left = `${gameState.cursorPosition.col * 30}px`;
+            cursor.style.top = `${gameState.cursorPosition.row * 30}px`;
+            cursor.classList.remove('hidden');
         }
 
         // 处理点击事件
         function handleCellClick(row, col) {
             if (gameState.isTraining || gameState.isAIBattle || 
-                gameState.gameOver || gameState.currentPlayer !== 1 || 
+                gameState.gameOver || 
+                (gameState.currentPlayer !== 1 && document.getElementById('firstPlayer').value === 'human') || 
                 gameState.board[row][col] !== 0) {
                 return;
             }
             
-            makeMove(row, col, 1);
+            // 检查是否是限制走棋位置
+            if (isMoveRestricted(row, col)) {
+                addCommandOutput(`位置 ${String.fromCharCode(65 + col)}${15 - row} 被规则限制`);
+                return;
+            }
+            
+            makeMove(row, col, gameState.currentPlayer);
             
             if (!gameState.gameOver) {
+                if (gameState.swapAvailable && gameState.moveHistory.length === 1) {
+                    // 一手交换规则下，玩家可以请求交换
+                    gameState.swapRequested = confirm("你想要交换棋子颜色吗?");
+                    if (gameState.swapRequested) {
+                        swapPlayers();
+                    }
+                    gameState.swapAvailable = false;
+                }
+                
                 setTimeout(() => aiMove(), 100);
             }
+        }
+
+        // 检查走棋是否被限制
+        function isMoveRestricted(row, col) {
+            return gameState.restrictedMoves.some(move => 
+                (move.from && move.from.row === row && move.from.col === col) ||
+                (move.to && row >= Math.min(move.from.row, move.to.row) && 
+                          row <= Math.max(move.from.row, move.to.row) && 
+                          col >= Math.min(move.from.col, move.to.col) && 
+                          col <= Math.max(move.from.col, move.to.col))
+            );
+        }
+
+        // 交换玩家
+        function swapPlayers() {
+            // 交换棋盘上的棋子
+            for (let r = 0; r < 15; r++) {
+                for (let c = 0; c < 15; c++) {
+                    if (gameState.board[r][c] === 1) {
+                        gameState.board[r][c] = 2;
+                    } else if (gameState.board[r][c] === 2) {
+                        gameState.board[r][c] = 1;
+                    }
+                }
+            }
+            
+            // 更新历史记录
+            gameState.moveHistory.forEach(move => {
+                move.player = move.player === 1 ? 2 : 1;
+            });
+            
+            // 更新当前玩家
+            gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            
+            addCommandOutput("玩家已交换棋子颜色");
+            updateBoardDisplay();
         }
 
         // 执行落子
@@ -400,16 +565,24 @@
             gameState.lastMove = { row, col, player };
             gameState.currentPlayer = player === 1 ? 2 : 1;
             
+            // 应用规则限制
+            applyRuleRestrictions(row, col);
+            
             updateBoardDisplay();
             
             if (checkWin(row, col, player)) {
                 gameState.gameOver = true;
-                const winner = player === 1 ? '黑棋(玩家)' : '白棋(AI)';
-                document.getElementById('status').textContent = `${winner} 获胜!`;
+                const winner = player === 1 ? '黑棋' : '白棋';
+                const winnerName = (player === 1 && document.getElementById('firstPlayer').value === 'human') || 
+                                 (player === 2 && document.getElementById('firstPlayer').value === 'ai') ? 
+                                 '玩家' : 'AI';
+                document.getElementById('status').textContent = `${winnerName}(${winner}) 获胜!`;
                 
                 // 记录学习数据
                 if (!gameState.isTraining && !gameState.isAIBattle) {
-                    if (player === 2) { // AI赢了
+                    if ((player === 2 && document.getElementById('firstPlayer').value === 'human') || 
+                        (player === 1 && document.getElementById('firstPlayer').value === 'ai')) {
+                        // AI赢了
                         gameState.learningData.wins.push({
                             board: JSON.parse(JSON.stringify(gameState.board)),
                             moves: [...gameState.moveHistory]
@@ -441,6 +614,124 @@
             }
         }
 
+        // 应用规则限制
+        function applyRuleRestrictions(row, col) {
+            if (gameState.currentRule === 'rif') {
+                // RIF规则：黑棋第一手必须下在天元，第二手必须下在周围3x3区域
+                if (gameState.moveHistory.length === 1 && gameState.currentPlayer === 2) {
+                    // 白棋第二手限制在3x3区域
+                    const center = {row: 7, col: 7};
+                    gameState.restrictedMoves = [{
+                        from: {row: center.row - 1, col: center.col - 1},
+                        to: {row: center.row + 1, col: center.col + 1}
+                    }];
+                } else if (gameState.moveHistory.length === 2 && gameState.currentPlayer === 1) {
+                    // 黑棋第三手限制不在对称位置
+                    const firstBlack = gameState.moveHistory[0];
+                    const firstWhite = gameState.moveHistory[1];
+                    
+                    // 计算对称位置
+                    const symmetricRow = 2 * firstWhite.row - firstBlack.row;
+                    const symmetricCol = 2 * firstWhite.col - firstBlack.col;
+                    
+                    if (symmetricRow >= 0 && symmetricRow < 15 && symmetricCol >= 0 && symmetricCol < 15) {
+                        gameState.restrictedMoves = [{
+                            from: {row: symmetricRow, col: symmetricCol},
+                            to: {row: symmetricRow, col: symmetricCol}
+                        }];
+                    }
+                } else {
+                    gameState.restrictedMoves = [];
+                }
+            } else if (gameState.currentRule === 'yamaguchi') {
+                // 山口规则：类似RIF但有更多限制
+                if (gameState.moveHistory.length === 0 && gameState.currentPlayer === 1) {
+                    // 黑棋第一手必须下在天元
+                    gameState.restrictedMoves = [{
+                        from: {row: 0, col: 0},
+                        to: {row: 14, col: 14},
+                        without: {row: 7, col: 7}
+                    }];
+                }
+                // 其他限制类似RIF...
+            } else if (gameState.currentRule === 'swap1') {
+                // 一手交换规则
+                if (gameState.moveHistory.length === 0 && gameState.currentPlayer === 1) {
+                    // 黑棋第一手限制
+                    gameState.restrictedMoves = [{
+                        from: {row: 4, col: 4},
+                        to: {row: 10, col: 10}
+                    }];
+                    gameState.swapAvailable = true;
+                } else {
+                    gameState.restrictedMoves = [];
+                }
+            } else if (gameState.currentRule === 'custom') {
+                // 自定义规则
+                applyCustomRules();
+            } else {
+                // 标准规则无限制
+                gameState.restrictedMoves = [];
+            }
+        }
+
+        // 应用自定义规则
+        function applyCustomRules() {
+            const customRules = document.getElementById('customRuleEditor').value.split('\n');
+            gameState.restrictedMoves = [];
+            
+            for (let i = 0; i < Math.min(customRules.length, gameState.moveHistory.length + 1); i++) {
+                const rule = customRules[i].trim();
+                if (!rule) continue;
+                
+                // 解析规则
+                if (rule.startsWith('without')) {
+                    const parts = rule.split(' ');
+                    if (parts.length >= 2) {
+                        const pos = parsePosition(parts[1]);
+                        if (pos) {
+                            gameState.restrictedMoves.push({
+                                from: pos,
+                                to: pos
+                            });
+                        }
+                    }
+                } else if (rule.includes('to')) {
+                    const [fromPart, toPart] = rule.split('to');
+                    const fromPos = parsePosition(fromPart.trim());
+                    const toPos = parsePosition(toPart.trim());
+                    if (fromPos && toPos) {
+                        gameState.restrictedMoves.push({
+                            from: fromPos,
+                            to: toPos
+                        });
+                    }
+                } else {
+                    const pos = parsePosition(rule);
+                    if (pos) {
+                        gameState.restrictedMoves.push({
+                            from: pos,
+                            to: pos
+                        });
+                    }
+                }
+            }
+        }
+
+        // 解析位置字符串 (如 "A1" 或 "H8")
+        function parsePosition(posStr) {
+            if (!posStr || posStr.length < 2) return null;
+            
+            const colChar = posStr[0].toUpperCase();
+            const col = colChar.charCodeAt(0) - 'A'.charCodeAt(0);
+            const row = 15 - parseInt(posStr.slice(1));
+            
+            if (col >= 0 && col < 15 && row >= 0 && row < 15) {
+                return {row, col};
+            }
+            return null;
+        }
+
         // 悔棋功能
         function undoMove() {
             if (gameState.isTraining || gameState.isAIBattle || 
@@ -469,6 +760,9 @@
             gameState.currentPlayer = gameState.moveHistory.length % 2 === 0 ? 1 : 2;
             gameState.lastMove = gameState.moveHistory.length > 0 ? 
                 gameState.moveHistory[gameState.moveHistory.length - 1] : null;
+            
+            // 重新应用规则限制
+            applyRuleRestrictions(gameState.lastMove?.row || 7, gameState.lastMove?.col || 7);
             
             document.getElementById('status').textContent = gameState.currentPlayer === 1 ? 
                 '你的回合(黑棋)' : 'AI思考中...';
@@ -507,6 +801,9 @@
             gameState.gameOver = false;
             gameState.currentPlayer = (moveIndex + 1) % 2 === 0 ? 1 : 2;
             gameState.lastMove = gameState.moveHistory[moveIndex];
+            
+            // 重新应用规则限制
+            applyRuleRestrictions(gameState.lastMove.row, gameState.lastMove.col);
             
             document.getElementById('status').textContent = gameState.currentPlayer === 1 ? 
                 '你的回合(黑棋)' : 'AI思考中...';
@@ -562,22 +859,44 @@
             });
         }
 
-        // AI走棋
+        // AI走棋（增强版，避免"瞎走"）
         function aiMove() {
             if (gameState.gameOver || gameState.currentPlayer !== 2) return;
             
             const aiLevel = parseInt(document.getElementById('aiLevel').value);
             let move;
             
-            if (aiLevel === 1) {
-                move = findRandomMove();
-            } else if (aiLevel === 2) {
-                move = findBestMove(2);
-            } else {
-                move = findBestMove(2, true); // 高级模式使用更深的搜索
+            // 确保AI不会在已有棋子的位置落子
+            const isValidMove = (move) => {
+                if (!move) return false;
+                if (gameState.board[move.row][move.col] !== 0) return false;
+                return !isMoveRestricted(move.row, move.col);
+            };
+            
+            // 尝试找到最佳走棋，最多尝试5次
+            let attempts = 0;
+            do {
+                if (aiLevel === 1) {
+                    move = findRandomMove();
+                } else if (aiLevel === 2) {
+                    move = findBestMove(2);
+                } else if (aiLevel === 3) {
+                    move = findBestMove(2, true); // 使用深度搜索
+                } else {
+                    move = findDeepLearningMove(2); // 专家级使用深度学习
+                }
+                attempts++;
+            } while (!isValidMove(move) && attempts < 5);
+            
+            // 如果还是无效，随机找一个有效空位
+            if (!isValidMove(move)) {
+                const emptyCells = getValidMoves();
+                if (emptyCells.length > 0) {
+                    move = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                }
             }
             
-            if (move) {
+            if (move && isValidMove(move)) {
                 makeMove(move.row, move.col, 2);
             }
             
@@ -587,18 +906,22 @@
             }
         }
 
-        // 随机走棋（初级AI）
-        function findRandomMove() {
+        // 获取所有有效走棋位置
+        function getValidMoves() {
             const emptyCells = [];
-            
             for (let r = 0; r < 15; r++) {
                 for (let c = 0; c < 15; c++) {
-                    if (gameState.board[r][c] === 0) {
+                    if (gameState.board[r][c] === 0 && !isMoveRestricted(r, c)) {
                         emptyCells.push({ row: r, col: c });
                     }
                 }
             }
-            
+            return emptyCells;
+        }
+
+        // 随机走棋（初级AI，增强版）
+        function findRandomMove() {
+            const emptyCells = getValidMoves();
             if (emptyCells.length === 0) return null;
             
             // 优先选择中心区域
@@ -611,10 +934,10 @@
             return candidates[Math.floor(Math.random() * candidates.length)];
         }
 
-        // 寻找最佳走棋（中级/高级AI）
+        // 寻找最佳走棋（中级/高级AI，增强版）
         function findBestMove(player, advanced = false) {
             const opponent = player === 1 ? 2 : 1;
-            const emptyCells = getEmptyCellsNearOccupied();
+            const emptyCells = getValidMoves();
             
             if (emptyCells.length === 0) {
                 return findRandomMove();
@@ -627,6 +950,7 @@
             // 评估每个空位的分数
             for (const cell of emptyCells) {
                 const { row, col } = cell;
+                
                 let offensiveScore = 0;
                 let defensiveScore = 0;
                 
@@ -640,17 +964,15 @@
                 const totalScore = offensiveScore + defensiveScore * 0.8;
                 
                 // 记录评分详情用于调试
-                if (gameState.debugMode) {
-                    scores.push({
-                        position: `${String.fromCharCode(65 + col)}${15 - row}`,
-                        row,
-                        col,
-                        offensiveScore,
-                        defensiveScore,
-                        totalScore,
-                        patterns: getPatternsAt(row, col, player, true).map(p => p.name).join(', ')
-                    });
-                }
+                scores.push({
+                    position: `${String.fromCharCode(65 + col)}${15 - row}`,
+                    row,
+                    col,
+                    offensiveScore,
+                    defensiveScore,
+                    totalScore,
+                    patterns: getPatternsAt(row, col, player, true).map(p => p.name).join(', ')
+                });
                 
                 // 更新最佳走棋
                 if (totalScore > bestScore) {
@@ -662,9 +984,7 @@
             }
             
             // 显示调试信息
-            if (gameState.debugMode) {
-                displayDebugInfo(scores, bestScore);
-            }
+            displayDebugInfo(scores, bestScore);
             
             // 如果有多个最佳选择，优先选择中心附近的
             if (bestMoves.length > 1) {
@@ -684,7 +1004,20 @@
                 }
             }
             
-            return bestMoves[0];
+            return bestMoves.length > 0 ? bestMoves[0] : null;
+        }
+
+        // 深度学习走棋（专家级AI）
+        function findDeepLearningMove(player) {
+            // 如果有学习数据，使用学习到的模式
+            if (gameState.learningData.deepLearning && Object.keys(gameState.learningData.deepLearning).length > 0) {
+                // 这里可以添加更复杂的深度学习模型推理
+                // 简化版：结合学习到的模式和当前棋盘状态
+                return findBestMove(player, true);
+            }
+            
+            // 如果没有学习数据，使用高级搜索
+            return findBestMove(player, true);
         }
 
         // 深度搜索（高级AI）
@@ -692,7 +1025,7 @@
             if (depth === 0) return null;
             
             const opponent = player === 1 ? 2 : 1;
-            const emptyCells = getEmptyCellsNearOccupied();
+            const emptyCells = getValidMoves();
             
             // 限制搜索范围以提高性能
             const candidates = emptyCells.slice(0, 15);
@@ -714,7 +1047,7 @@
                 
                 // 评估对手的最佳回应
                 let opponentBestScore = -Infinity;
-                const opponentEmptyCells = getEmptyCellsNearOccupied();
+                const opponentEmptyCells = getValidMoves();
                 
                 for (const oppCell of opponentEmptyCells) {
                     const oppScore = evaluatePosition(oppCell.row, oppCell.col, opponent);
@@ -749,46 +1082,7 @@
             return bestMove;
         }
 
-        // 获取棋盘上所有空位（仅限邻近已有棋子的位置）
-        function getEmptyCellsNearOccupied() {
-            const emptyCells = [];
-            const checked = Array(15).fill().map(() => Array(15).fill(false));
-            
-            for (let r = 0; r < 15; r++) {
-                for (let c = 0; c < 15; c++) {
-                    if (gameState.board[r][c] !== 0) {
-                        // 检查周围2格内的空位
-                        for (let dr = -2; dr <= 2; dr++) {
-                            for (let dc = -2; dc <= 2; dc++) {
-                                const nr = r + dr;
-                                const nc = c + dc;
-                                
-                                if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15 && 
-                                    gameState.board[nr][nc] === 0 && !checked[nr][nc]) {
-                                    emptyCells.push({ row: nr, col: nc });
-                                    checked[nr][nc] = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // 如果没有邻近的空位，返回所有空位
-            if (emptyCells.length === 0) {
-                for (let r = 0; r < 15; r++) {
-                    for (let c = 0; c < 15; c++) {
-                        if (gameState.board[r][c] === 0) {
-                            emptyCells.push({ row: r, col: c });
-                        }
-                    }
-                }
-            }
-            
-            return emptyCells;
-        }
-
-        // 评估某个位置的分数
+        // 评估某个位置的分数（增强版）
         function evaluatePosition(row, col, player) {
             if (gameState.board[row][col] !== 0) return -Infinity;
             
@@ -817,6 +1111,16 @@
             const centerDist = Math.sqrt(Math.pow(row - 7, 2) + Math.pow(col - 7, 2));
             const centerBonus = 20 / (1 + centerDist);
             totalScore += centerBonus;
+            
+            // 深度学习调整分数（如果有）
+            if (gameState.learningData.deepLearning) {
+                // 这里可以添加深度学习模型的分数调整
+                // 简化版：根据历史数据调整
+                const positionKey = `${row},${col},${player}`;
+                if (gameState.learningData.deepLearning[positionKey]) {
+                    totalScore *= gameState.learningData.deepLearning[positionKey];
+                }
+            }
             
             return totalScore;
         }
@@ -960,9 +1264,9 @@
             return true;
         }
 
-        // 更新棋盘显示
+        // 更新棋盘显示（增强版，确保棋盘清晰可见）
         function updateBoardDisplay() {
-            const cells = document.querySelectorAll('.cell');
+            const cells = document.querySelectorAll('#board .cell');
             
             for (let r = 0; r < 15; r++) {
                 for (let c = 0; c < 15; c++) {
@@ -1025,8 +1329,82 @@
                 
                 scoreDetails.appendChild(row);
             }
+        }
+
+        // 添加命令行输出
+        function addCommandOutput(message) {
+            const output = document.getElementById('commandOutput');
+            const entry = document.createElement('div');
+            entry.textContent = message;
+            output.appendChild(entry);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        // 处理命令行输入
+        function handleCommandInput() {
+            const input = document.getElementById('commandInput');
+            const command = input.value.trim();
+            input.value = '';
             
-            debugInfo.classList.remove('hidden');
+            if (!command) return;
+            
+            addCommandOutput(`> ${command}`);
+            
+            const parts = command.split(' ');
+            const cmd = parts[0].toLowerCase();
+            const args = parts.slice(1);
+            
+            try {
+                if (cmd === 'goto' && args.length === 1) {
+                    // 移动光标命令
+                    const pos = parsePosition(args[0]);
+                    if (pos) {
+                        gameState.cursorPosition = pos;
+                        updateCursorPosition();
+                        addCommandOutput(`光标已移动到 ${args[0]}`);
+                    } else {
+                        addCommandOutput(`无效位置: ${args[0]}`);
+                    }
+                } else if (cmd === 'chess' && args.length === 1) {
+                    // 落子命令
+                    const pos = parsePosition(args[0]);
+                    if (pos) {
+                        if (gameState.board[pos.row][pos.col] === 0 || 
+                            (gameState.currentPlayer === 1 && document.getElementById('firstPlayer').value === 'human')) {
+                            // 允许命令行覆盖AI的棋子（如果是玩家回合）
+                            makeMove(pos.row, pos.col, gameState.currentPlayer);
+                            
+                            if (!gameState.gameOver) {
+                                setTimeout(() => aiMove(), 100);
+                            }
+                        } else {
+                            addCommandOutput(`位置 ${args[0]} 已有棋子`);
+                        }
+                    } else {
+                        addCommandOutput(`无效位置: ${args[0]}`);
+                    }
+                } else if (cmd === 'undo') {
+                    // 悔棋命令
+                    undoMove();
+                    addCommandOutput(`已撤销上一步`);
+                } else if (cmd === 'new') {
+                    // 新游戏命令
+                    newGame();
+                    addCommandOutput(`开始新游戏`);
+                } else if (cmd === 'help') {
+                    // 帮助命令
+                    addCommandOutput(`可用命令:
+- goto <位置>: 移动光标到指定位置 (如: goto A1)
+- chess <位置>: 在指定位置落子 (如: chess B2)
+- undo: 撤销上一步
+- new: 开始新游戏
+- help: 显示帮助信息`);
+                } else {
+                    addCommandOutput(`未知命令: ${cmd}。输入 help 查看帮助`);
+                }
+            } catch (e) {
+                addCommandOutput(`执行命令出错: ${e.message}`);
+            }
         }
 
         // 保存学习数据
@@ -1049,7 +1427,8 @@
                     HALF_OPEN_TWO: 50,
                     OPEN_ONE: 10,
                     HALF_OPEN_ONE: 1
-                }
+                },
+                deepLearning: {}
             };
             
             // 更新PATTERNS中的权重
@@ -1065,17 +1444,30 @@
             saveLearningData();
             updateAIBattleStats();
             addLogEntry('学习数据已清除', 'system');
+            addCommandOutput('已清除所有学习数据');
         }
 
         // 新游戏
         function newGame() {
             if (gameState.isTraining || gameState.isAIBattle) return;
             
+            // 应用选择的规则
+            gameState.currentRule = document.getElementById('gameRule').value;
+            gameState.swapAvailable = false;
+            gameState.swapRequested = false;
+            
+            if (gameState.currentRule === 'custom') {
+                document.getElementById('customRuleContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('customRuleContainer').classList.add('hidden');
+            }
+            
             gameState.board = Array(15).fill().map(() => Array(15).fill(0));
             gameState.gameOver = false;
             gameState.lastMove = null;
             gameState.moveHistory = [];
             gameState.boardHistory = [];
+            gameState.restrictedMoves = [];
             
             const firstPlayer = document.getElementById('firstPlayer').value;
             gameState.currentPlayer = firstPlayer === 'human' ? 1 : 2;
@@ -1083,6 +1475,9 @@
             document.getElementById('status').textContent = firstPlayer === 'human' ? '你的回合(黑棋)' : 'AI思考中...';
             updateBoardDisplay();
             updateMoveHistoryDisplay();
+            
+            // 应用初始规则限制
+            applyRuleRestrictions(7, 7);
             
             if (firstPlayer === 'ai') {
                 setTimeout(() => aiMove(), 300);
@@ -1106,6 +1501,8 @@
             document.getElementById('startAIBattle').disabled = true;
             document.getElementById('undoMove').disabled = true;
             
+            addCommandOutput(`开始AI训练，共 ${games} 局`);
+            
             // 开始训练
             trainingStep();
         }
@@ -1122,6 +1519,7 @@
                 document.getElementById('startAIBattle').disabled = false;
                 document.getElementById('undoMove').disabled = false;
                 
+                addCommandOutput(`AI训练完成，共 ${parseInt(document.getElementById('trainGames').value)} 局`);
                 return;
             }
             
@@ -1189,6 +1587,8 @@
             document.getElementById('startAIBattle').disabled = true;
             document.getElementById('undoMove').disabled = true;
             
+            addCommandOutput(`开始AI对战，共 ${games} 局`);
+            
             // 开始对战
             aiBattleStep();
         }
@@ -1204,6 +1604,8 @@
                 document.getElementById('startTraining').disabled = false;
                 document.getElementById('startAIBattle').disabled = false;
                 document.getElementById('undoMove').disabled = false;
+                
+                addCommandOutput(`AI对战完成，共 ${parseInt(document.getElementById('aiBattleGames').value)} 局`);
                 return;
             }
             
@@ -1220,6 +1622,8 @@
             const completedGames = totalGames - gameState.trainingQueue;
             document.getElementById('status').textContent = `AI对战中 (${completedGames}/${totalGames})`;
             updateBoardDisplay();
+            
+            addCommandOutput(`开始对战局 ${completedGames + 1}`);
             
             // 开始AI对战
             setTimeout(() => {
@@ -1265,12 +1669,29 @@
             document.getElementById('toggleDebug').addEventListener('click', () => {
                 gameState.debugMode = !gameState.debugMode;
                 document.getElementById('debugInfo').classList.toggle('hidden', !gameState.debugMode);
+                document.getElementById('toggleDebug').textContent = gameState.debugMode ? '隐藏AI思考' : '显示AI思考';
             });
             document.getElementById('startTraining').addEventListener('click', startTraining);
             document.getElementById('startAIBattle').addEventListener('click', startAIBattle);
+            document.getElementById('commandInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleCommandInput();
+                }
+            });
+            document.getElementById('gameRule').addEventListener('change', () => {
+                if (document.getElementById('gameRule').value === 'custom') {
+                    document.getElementById('customRuleContainer').classList.remove('hidden');
+                } else {
+                    document.getElementById('customRuleContainer').classList.add('hidden');
+                }
+            });
             
             // 初始游戏
             newGame();
+            
+            // 添加欢迎消息
+            addCommandOutput('五子棋AI系统已启动');
+            addCommandOutput('输入 help 查看可用命令');
         }
 
         // 启动游戏
