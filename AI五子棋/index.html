@@ -115,6 +115,14 @@
         .last-move {
             box-shadow: 0 0 5px 2px rgba(255, 215, 0, 0.7);
         }
+        .last-move-marker {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            top: 10px;
+            left: 10px;
+        }
         .debug-panel {
             display: flex;
             width: 100%;
@@ -242,6 +250,14 @@
             height: 100px;
             font-family: monospace;
         }
+        .win-prediction {
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -312,6 +328,8 @@
         <div id="cursor" class="cursor hidden"></div>
     </div>
     
+    <div class="win-prediction" id="winPrediction"></div>
+    
     <div class="debug-panel">
         <div id="debugInfo" class="debug-info">
             <h3>AI思考过程</h3>
@@ -365,7 +383,10 @@
                     OPEN_TWO: 200,
                     HALF_OPEN_TWO: 50,
                     OPEN_ONE: 10,
-                    HALF_OPEN_ONE: 1
+                    HALF_OPEN_ONE: 1,
+                    DOUBLE_OPEN_THREE: 3500,
+                    DOUBLE_HALF_OPEN_FOUR: 8000,
+                    FORK: 6000
                 },
                 deepLearning: {} // 深度学习模型数据
             },
@@ -424,6 +445,21 @@
                 score: gameState.learningData.patternWeights.HALF_OPEN_ONE, 
                 name: '眠一',
                 type: 'HALF_OPEN_ONE'
+            },
+            DOUBLE_OPEN_THREE: {
+                score: gameState.learningData.patternWeights.DOUBLE_OPEN_THREE,
+                name: '双活三',
+                type: 'DOUBLE_OPEN_THREE'
+            },
+            DOUBLE_HALF_OPEN_FOUR: {
+                score: gameState.learningData.patternWeights.DOUBLE_HALF_OPEN_FOUR,
+                name: '双冲四',
+                type: 'DOUBLE_HALF_OPEN_FOUR'
+            },
+            FORK: {
+                score: gameState.learningData.patternWeights.FORK,
+                name: '四三',
+                type: 'FORK'
             }
         };
 
@@ -520,13 +556,33 @@
 
         // 检查走棋是否被限制
         function isMoveRestricted(row, col) {
-            return gameState.restrictedMoves.some(move => 
-                (move.from && move.from.row === row && move.from.col === col) ||
-                (move.to && row >= Math.min(move.from.row, move.to.row) && 
-                          row <= Math.max(move.from.row, move.to.row) && 
-                          col >= Math.min(move.from.col, move.to.col) && 
-                          col <= Math.max(move.from.col, move.to.col))
-            );
+            if (!gameState.restrictedMoves || gameState.restrictedMoves.length === 0) {
+                return false;
+            }
+            
+            return gameState.restrictedMoves.some(move => {
+                if (move.from && !move.to) {
+                    // 单个限制位置
+                    return move.from.row === row && move.from.col === col;
+                } else if (move.from && move.to) {
+                    // 区域限制
+                    const minRow = Math.min(move.from.row, move.to.row);
+                    const maxRow = Math.max(move.from.row, move.to.row);
+                    const minCol = Math.min(move.from.col, move.to.col);
+                    const maxCol = Math.max(move.from.col, move.to.col);
+                    
+                    if (move.without) {
+                        // 排除特定位置
+                        return row >= minRow && row <= maxRow && 
+                               col >= minCol && col <= maxCol &&
+                               !(row === move.without.row && col === move.without.col);
+                    } else {
+                        return row >= minRow && row <= maxRow && 
+                               col >= minCol && col <= maxCol;
+                    }
+                }
+                return false;
+            });
         }
 
         // 交换玩家
@@ -556,6 +612,16 @@
 
         // 执行落子
         function makeMove(row, col, player) {
+            if (!isValidPosition(row, col)) {
+                console.error(`无效位置: (${row}, ${col})`);
+                return;
+            }
+            
+            if (gameState.board[row][col] !== 0) {
+                console.error(`位置已有棋子: (${row}, ${col})`);
+                return;
+            }
+            
             // 保存当前棋盘状态到历史记录
             gameState.boardHistory.push(JSON.parse(JSON.stringify(gameState.board)));
             gameState.moveHistory.push({ row, col, player });
@@ -569,6 +635,7 @@
             applyRuleRestrictions(row, col);
             
             updateBoardDisplay();
+            updateWinPrediction();
             
             if (checkWin(row, col, player)) {
                 gameState.gameOver = true;
@@ -602,6 +669,15 @@
                         adjustPatternWeights(false); // 根据失败调整权重
                     }
                     saveLearningData();
+                }
+                
+                if (gameState.isAIBattle) {
+                    if (player === 1) {
+                        gameState.learningData.aiBattleStats.ai1Wins++;
+                    } else {
+                        gameState.learningData.aiBattleStats.ai2Wins++;
+                    }
+                    updateAIBattleStats();
                 }
             } else if (isBoardFull()) {
                 gameState.gameOver = true;
@@ -724,7 +800,15 @@
             
             const colChar = posStr[0].toUpperCase();
             const col = colChar.charCodeAt(0) - 'A'.charCodeAt(0);
-            const row = 15 - parseInt(posStr.slice(1));
+            const rowStr = posStr.slice(1);
+            let row;
+            
+            // 处理两位数行号
+            if (rowStr.length === 2 && rowStr[0] === '1' && rowStr[1] === '0') {
+                row = 5; // A10 对应第5行 (15-10=5)
+            } else {
+                row = 15 - parseInt(rowStr);
+            }
             
             if (col >= 0 && col < 15 && row >= 0 && row < 15) {
                 return {row, col};
@@ -769,6 +853,7 @@
             
             updateBoardDisplay();
             updateMoveHistoryDisplay();
+            updateWinPrediction();
         }
 
         // 更新走棋历史显示
@@ -810,6 +895,7 @@
             
             updateBoardDisplay();
             updateMoveHistoryDisplay();
+            updateWinPrediction();
         }
 
         // 调整模式权重（学习功能）
@@ -829,7 +915,10 @@
                     OPEN_TWO: 0,
                     HALF_OPEN_TWO: 0,
                     OPEN_ONE: 0,
-                    HALF_OPEN_ONE: 0
+                    HALF_OPEN_ONE: 0,
+                    DOUBLE_OPEN_THREE: 0,
+                    DOUBLE_HALF_OPEN_FOUR: 0,
+                    FORK: 0
                 };
                 
                 // 统计获胜/失败方的模式
@@ -869,6 +958,7 @@
             // 确保AI不会在已有棋子的位置落子
             const isValidMove = (move) => {
                 if (!move) return false;
+                if (!isValidPosition(move.row, move.col)) return false;
                 if (gameState.board[move.row][move.col] !== 0) return false;
                 return !isMoveRestricted(move.row, move.col);
             };
@@ -1000,7 +1090,7 @@
                 // 如果没有立即获胜或防守的必要，进行更深的搜索
                 const deepMove = findDeepMove(player, 2); // 搜索深度为2
                 if (deepMove) {
-                    return deepMove;
+                    return deepMove.move;
                 }
             }
             
@@ -1021,70 +1111,71 @@
         }
 
         // 深度搜索（高级AI）
-        function findDeepMove(player, depth) {
-            if (depth === 0) return null;
+        function findDeepMove(player, depth, alpha = -Infinity, beta = Infinity) {
+            if (depth === 0) {
+                return {
+                    score: evaluateBoard(player),
+                    move: null
+                };
+            }
             
-            const opponent = player === 1 ? 2 : 1;
             const emptyCells = getValidMoves();
-            
-            // 限制搜索范围以提高性能
-            const candidates = emptyCells.slice(0, 15);
-            
             let bestScore = -Infinity;
             let bestMove = null;
             
-            for (const cell of candidates) {
-                const { row, col } = cell;
+            // 按评估分数排序移动
+            emptyCells.sort((a, b) => {
+                return evaluatePosition(b.row, b.col, player) - evaluatePosition(a.row, a.col, player);
+            });
+            
+            // 限制搜索宽度提高性能
+            const maxWidth = Math.min(10, emptyCells.length);
+            
+            for (let i = 0; i < maxWidth; i++) {
+                const {row, col} = emptyCells[i];
                 
-                // 模拟落子
+                // 模拟移动
                 gameState.board[row][col] = player;
                 
-                // 检查是否直接获胜
+                // 检查是否获胜
                 if (checkWin(row, col, player)) {
                     gameState.board[row][col] = 0; // 撤销模拟
-                    return { row, col };
+                    return {
+                        score: PATTERNS.FIVE.score - depth, // 更早的胜利分数更高
+                        move: {row, col}
+                    };
                 }
                 
-                // 评估对手的最佳回应
-                let opponentBestScore = -Infinity;
-                const opponentEmptyCells = getValidMoves();
+                // 递归评估
+                const result = findDeepMove(player === 1 ? 2 : 1, depth - 1, -beta, -alpha);
+                const currentScore = -result.score;
                 
-                for (const oppCell of opponentEmptyCells) {
-                    const oppScore = evaluatePosition(oppCell.row, oppCell.col, opponent);
-                    if (oppScore > opponentBestScore) {
-                        opponentBestScore = oppScore;
-                    }
-                }
-                
-                // 计算净得分
-                const currentScore = evaluatePosition(row, col, player) - opponentBestScore * 0.7;
-                
-                // 递归搜索
-                if (depth > 1) {
-                    const deepMove = findDeepMove(player, depth - 1);
-                    if (deepMove) {
-                        const deepScore = evaluatePosition(deepMove.row, deepMove.col, player);
-                        if (deepScore > currentScore) {
-                            gameState.board[row][col] = 0; // 撤销模拟
-                            continue;
-                        }
-                    }
-                }
+                // 撤销模拟
+                gameState.board[row][col] = 0;
                 
                 if (currentScore > bestScore) {
                     bestScore = currentScore;
-                    bestMove = { row, col };
+                    bestMove = {row, col};
+                    
+                    if (bestScore > alpha) {
+                        alpha = bestScore;
+                    }
+                    
+                    if (alpha >= beta) {
+                        break; // Alpha-beta剪枝
+                    }
                 }
-                
-                gameState.board[row][col] = 0; // 撤销模拟
             }
             
-            return bestMove;
+            return {
+                score: bestScore,
+                move: bestMove
+            };
         }
 
         // 评估某个位置的分数（增强版）
         function evaluatePosition(row, col, player) {
-            if (gameState.board[row][col] !== 0) return -Infinity;
+            if (!isValidPosition(row, col) || gameState.board[row][col] !== 0) return -Infinity;
             
             let totalScore = 0;
             const patterns = [];
@@ -1101,10 +1192,20 @@
                 totalScore += PATTERNS.OPEN_FOUR.score * 0.5; // 额外加分
             }
             if (patterns.filter(p => p.type === 'OPEN_THREE').length >= 2) {
-                totalScore += PATTERNS.OPEN_THREE.score * 1.5; // 双活三加分
+                totalScore += PATTERNS.DOUBLE_OPEN_THREE.score; // 双活三加分
             }
             if (patterns.filter(p => p.type === 'HALF_OPEN_FOUR').length >= 2) {
-                totalScore += PATTERNS.HALF_OPEN_FOUR.score * 1.2; // 双冲四加分
+                totalScore += PATTERNS.DOUBLE_HALF_OPEN_FOUR.score; // 双冲四加分
+            }
+            
+            // 四三组合（活四+活三或冲四+活三）
+            const openFourCount = patterns.filter(p => p.type === 'OPEN_FOUR').length;
+            const halfOpenFourCount = patterns.filter(p => p.type === 'HALF_OPEN_FOUR').length;
+            const openThreeCount = patterns.filter(p => p.type === 'OPEN_THREE').length;
+            
+            if ((openFourCount >= 1 && openThreeCount >= 1) || 
+                (halfOpenFourCount >= 1 && openThreeCount >= 1)) {
+                totalScore += PATTERNS.FORK.score;
             }
             
             // 中心位置加分（开局时更重要）
@@ -1123,6 +1224,25 @@
             }
             
             return totalScore;
+        }
+
+        // 评估整个棋盘
+        function evaluateBoard(player) {
+            let score = 0;
+            const opponent = player === 1 ? 2 : 1;
+            
+            // 评估整个棋盘
+            for (let r = 0; r < 15; r++) {
+                for (let c = 0; c < 15; c++) {
+                    if (gameState.board[r][c] === player) {
+                        score += evaluatePosition(r, c, player);
+                    } else if (gameState.board[r][c] === opponent) {
+                        score -= evaluatePosition(r, c, opponent);
+                    }
+                }
+            }
+            
+            return score;
         }
 
         // 获取某个位置的所有模式（返回完整模式对象）
@@ -1287,13 +1407,47 @@
                     
                     if (gameState.lastMove && gameState.lastMove.row === r && gameState.lastMove.col === c) {
                         cell.classList.add('last-move');
+                        
+                        // 添加准星标记
+                        const marker = document.createElement('div');
+                        marker.className = 'last-move-marker';
+                        marker.style.backgroundColor = gameState.lastMove.player === 1 ? 'gold' : 'silver';
+                        cell.appendChild(marker);
                     }
                 }
             }
         }
 
+        // 更新胜率预测
+        function updateWinPrediction() {
+            if (gameState.gameOver) {
+                document.getElementById('winPrediction').textContent = '';
+                return;
+            }
+            
+            const player = gameState.currentPlayer;
+            const opponent = player === 1 ? 2 : 1;
+            
+            // 评估当前局面
+            const playerScore = evaluateBoard(player);
+            const opponentScore = evaluateBoard(opponent);
+            const totalScore = playerScore + opponentScore;
+            
+            let prediction;
+            if (totalScore === 0) {
+                prediction = '局势均衡';
+            } else {
+                const playerWinRate = Math.round(playerScore / totalScore * 100);
+                prediction = `${player === 1 ? '黑棋' : '白棋'}胜率: ${playerWinRate}%`;
+            }
+            
+            document.getElementById('winPrediction').textContent = prediction;
+        }
+
         // 显示调试信息
         function displayDebugInfo(scores, bestScore) {
+            if (!gameState.debugMode) return;
+            
             const debugInfo = document.getElementById('debugInfo');
             const aiThinking = document.getElementById('aiThinking');
             const scoreDetails = document.getElementById('scoreDetails');
@@ -1426,7 +1580,10 @@
                     OPEN_TWO: 200,
                     HALF_OPEN_TWO: 50,
                     OPEN_ONE: 10,
-                    HALF_OPEN_ONE: 1
+                    HALF_OPEN_ONE: 1,
+                    DOUBLE_OPEN_THREE: 3500,
+                    DOUBLE_HALF_OPEN_FOUR: 8000,
+                    FORK: 6000
                 },
                 deepLearning: {}
             };
@@ -1440,6 +1597,9 @@
             PATTERNS.HALF_OPEN_TWO.score = 50;
             PATTERNS.OPEN_ONE.score = 10;
             PATTERNS.HALF_OPEN_ONE.score = 1;
+            PATTERNS.DOUBLE_OPEN_THREE.score = 3500;
+            PATTERNS.DOUBLE_HALF_OPEN_FOUR.score = 8000;
+            PATTERNS.FORK.score = 6000;
             
             saveLearningData();
             updateAIBattleStats();
@@ -1475,6 +1635,7 @@
             document.getElementById('status').textContent = firstPlayer === 'human' ? '你的回合(黑棋)' : 'AI思考中...';
             updateBoardDisplay();
             updateMoveHistoryDisplay();
+            updateWinPrediction();
             
             // 应用初始规则限制
             applyRuleRestrictions(7, 7);
