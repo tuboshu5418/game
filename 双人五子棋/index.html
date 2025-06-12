@@ -534,6 +534,34 @@
             font-weight: bold;
         }
         
+        .ai-thinking {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            display: none;
+        }
+        
+        .ai-thinking span {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
         @media (max-width: 600px) {
             .players-container {
                 flex-direction: column;
@@ -605,6 +633,9 @@
                 <h2 id="winner-text">黑方获胜！</h2>
                 <button id="play-again"><i class="fas fa-redo"></i> 再来一局</button>
             </div>
+            <div class="ai-thinking" id="ai-thinking">
+                <span>AI思考中...</span>
+            </div>
         </div>
         
         <div class="controls">
@@ -624,6 +655,28 @@
                 <button class="modal-close" id="close-settings">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="form-group">
+                    <label for="game-mode">游戏模式:</label>
+                    <select id="game-mode">
+                        <option value="pvp">玩家 vs 玩家</option>
+                        <option value="pve">玩家 vs 电脑</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ai-difficulty">AI难度:</label>
+                    <select id="ai-difficulty">
+                        <option value="easy">简单</option>
+                        <option value="medium" selected>中等</option>
+                        <option value="hard">困难</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="player-color">玩家执子:</label>
+                    <select id="player-color">
+                        <option value="black">黑子(先手)</option>
+                        <option value="white">白子(后手)</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label for="board-size">棋盘大小:</label>
                     <select id="board-size">
@@ -688,12 +741,16 @@
             const blackUndoStones = blackPlayerCard.querySelectorAll('.undo-stone');
             const whiteUndoStones = whitePlayerCard.querySelectorAll('.undo-stone');
             const undoCountDisplay = document.getElementById('undo-count');
+            const aiThinking = document.getElementById('ai-thinking');
             
             // 设置相关元素
             const settingsButton = document.getElementById('settings');
             const settingsModal = document.getElementById('settings-modal');
             const closeSettings = document.getElementById('close-settings');
             const saveSettingsButton = document.getElementById('save-settings');
+            const gameModeSelect = document.getElementById('game-mode');
+            const aiDifficultySelect = document.getElementById('ai-difficulty');
+            const playerColorSelect = document.getElementById('player-color');
             const boardSizeSelect = document.getElementById('board-size');
             const undoLimitSelect = document.getElementById('undo-limit');
             const autoSaveSelect = document.getElementById('auto-save');
@@ -722,8 +779,27 @@
             let moveCounter = 0;
             let requestingUndo = false;
             
+            // AI相关设置
+            let gameMode = 'pvp'; // 'pvp' 或 'pve'
+            let aiDifficulty = 'medium'; // 'easy', 'medium', 'hard'
+            let playerColor = 'black'; // 'black' 或 'white'
+            let aiColor = 'white';
+            let aiThinkingTime = 500; // AI思考时间(ms)
+            
             // 初始化游戏
             function initGame() {
+                gameMode = gameModeSelect.value;
+                aiDifficulty = aiDifficultySelect.value;
+                playerColor = playerColorSelect.value;
+                aiColor = playerColor === 'black' ? 'white' : 'black';
+                
+                // 根据难度设置AI思考时间
+                switch(aiDifficulty) {
+                    case 'easy': aiThinkingTime = 300; break;
+                    case 'medium': aiThinkingTime = 700; break;
+                    case 'hard': aiThinkingTime = 1200; break;
+                }
+                
                 boardSize = parseInt(boardSizeSelect.value);
                 undoLimits.black = parseInt(undoLimitSelect.value);
                 undoLimits.white = parseInt(undoLimitSelect.value);
@@ -747,9 +823,17 @@
                 undoCountDisplay.textContent = '0';
                 saveButton.disabled = true;
                 loadButton.disabled = localStorage.getItem('gomoku_save') === null;
+                aiThinking.style.display = 'none';
                 
                 // 创建棋盘
                 createBoard();
+                
+                // 如果是PVE模式且AI先手，让AI下第一步
+                if (gameMode === 'pve' && aiColor === 'black') {
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 500);
+                }
             }
             
             // 创建棋盘
@@ -826,6 +910,9 @@
             function handleCellClick(e) {
                 if (!gameActive || requestingUndo) return;
                 
+                // 如果是PVE模式且当前是AI回合，忽略点击
+                if (gameMode === 'pve' && currentPlayer === aiColor) return;
+                
                 const row = parseInt(e.target.dataset.row);
                 const col = parseInt(e.target.dataset.col);
                 
@@ -862,6 +949,421 @@
                 
                 // 切换玩家
                 switchPlayer();
+                
+                // 如果是PVE模式且游戏未结束，让AI下棋
+                if (gameMode === 'pve' && !gameEnded && currentPlayer === aiColor) {
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 300);
+                }
+            }
+            
+            // AI下棋
+            function makeAIMove() {
+                if (!gameActive || gameEnded) return;
+                
+                aiThinking.style.display = 'flex';
+                
+                // 延迟执行，让用户看到AI正在思考
+                setTimeout(() => {
+                    const move = getAIMove();
+                    if (move) {
+                        const { row, col } = move;
+                        
+                        // 记录这一步
+                        moveHistory.push({row, col, player: currentPlayer});
+                        moveCounter++;
+                        undoButton.disabled = undoUsed[currentPlayer] >= undoLimits[currentPlayer];
+                        saveButton.disabled = false;
+                        
+                        // 下子
+                        placeStone(row, col, currentPlayer);
+                        
+                        // 检查是否获胜
+                        if (checkWin(row, col)) {
+                            gameEnded = true;
+                            showWin(currentPlayer === 'black' ? '黑方(AI)获胜！' : '白方(AI)获胜！');
+                            aiThinking.style.display = 'none';
+                            return;
+                        }
+                        
+                        // 检查是否平局
+                        if (checkDraw()) {
+                            gameEnded = true;
+                            showWin('棋盘已满，和局！');
+                            aiThinking.style.display = 'none';
+                            return;
+                        }
+                        
+                        // 自动保存
+                        if (autoSaveInterval > 0 && moveCounter % autoSaveInterval === 0) {
+                            autoSaveGame();
+                        }
+                        
+                        // 切换玩家
+                        switchPlayer();
+                    }
+                    
+                    aiThinking.style.display = 'none';
+                }, aiThinkingTime);
+            }
+            
+            // 获取AI的移动
+            function getAIMove() {
+                const emptyCells = [];
+                
+                // 收集所有空单元格
+                for (let i = 0; i < boardSize; i++) {
+                    for (let j = 0; j < boardSize; j++) {
+                        if (gameState[i][j] === null) {
+                            emptyCells.push({ row: i, col: j });
+                        }
+                    }
+                }
+                
+                if (emptyCells.length === 0) return null;
+                
+                // 根据难度选择AI策略
+                switch(aiDifficulty) {
+                    case 'easy':
+                        return getEasyAIMove(emptyCells);
+                    case 'medium':
+                        return getMediumAIMove(emptyCells);
+                    case 'hard':
+                        return getHardAIMove(emptyCells);
+                    default:
+                        return getMediumAIMove(emptyCells);
+                }
+            }
+            
+            // 简单AI - 随机下棋，但会尝试阻止玩家的四连
+            function getEasyAIMove(emptyCells) {
+                // 首先检查AI自己是否有四连可以获胜
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = aiColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 检查玩家是否有四连需要阻止
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = playerColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 随机选择一个位置
+                return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            }
+            
+            // 中等AI - 使用评分系统
+            function getMediumAIMove(emptyCells) {
+                // 首先检查AI自己是否有四连可以获胜
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = aiColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 检查玩家是否有四连需要阻止
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = playerColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 使用评分系统选择最佳位置
+                let bestScore = -Infinity;
+                let bestMoves = [];
+                
+                for (const cell of emptyCells) {
+                    const score = evaluatePosition(cell.row, cell.col, aiColor);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMoves = [cell];
+                    } else if (score === bestScore) {
+                        bestMoves.push(cell);
+                    }
+                }
+                
+                // 如果有多个最佳位置，随机选择一个
+                return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+            }
+            
+            // 困难AI - 使用极小化极大算法
+            function getHardAIMove(emptyCells) {
+                // 首先检查AI自己是否有四连可以获胜
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = aiColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 检查玩家是否有四连需要阻止
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = playerColor;
+                    if (checkWin(cell.row, cell.col)) {
+                        gameState[cell.row][cell.col] = null;
+                        return cell;
+                    }
+                    gameState[cell.row][cell.col] = null;
+                }
+                
+                // 使用极小化极大算法
+                let bestScore = -Infinity;
+                let bestMove = null;
+                const depth = 2; // 搜索深度
+                
+                for (const cell of emptyCells) {
+                    gameState[cell.row][cell.col] = aiColor;
+                    const score = minimax(depth, false, -Infinity, Infinity);
+                    gameState[cell.row][cell.col] = null;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = cell;
+                    }
+                }
+                
+                return bestMove || emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            }
+            
+            // 极小化极大算法
+            function minimax(depth, isMaximizing, alpha, beta) {
+                // 检查游戏是否结束
+                const gameResult = evaluateGame();
+                if (gameResult !== 0 || depth === 0) {
+                    return gameResult;
+                }
+                
+                if (isMaximizing) {
+                    let maxEval = -Infinity;
+                    for (let i = 0; i < boardSize; i++) {
+                        for (let j = 0; j < boardSize; j++) {
+                            if (gameState[i][j] === null) {
+                                gameState[i][j] = aiColor;
+                                const eval = minimax(depth - 1, false, alpha, beta);
+                                gameState[i][j] = null;
+                                maxEval = Math.max(maxEval, eval);
+                                alpha = Math.max(alpha, eval);
+                                if (beta <= alpha) break;
+                            }
+                        }
+                    }
+                    return maxEval;
+                } else {
+                    let minEval = Infinity;
+                    for (let i = 0; i < boardSize; i++) {
+                        for (let j = 0; j < boardSize; j++) {
+                            if (gameState[i][j] === null) {
+                                gameState[i][j] = playerColor;
+                                const eval = minimax(depth - 1, true, alpha, beta);
+                                gameState[i][j] = null;
+                                minEval = Math.min(minEval, eval);
+                                beta = Math.min(beta, eval);
+                                if (beta <= alpha) break;
+                            }
+                        }
+                    }
+                    return minEval;
+                }
+            }
+            
+            // 评估游戏状态
+            function evaluateGame() {
+                // 检查AI是否获胜
+                for (let i = 0; i < boardSize; i++) {
+                    for (let j = 0; j < boardSize; j++) {
+                        if (gameState[i][j] === aiColor && checkWin(i, j)) {
+                            return 1000;
+                        }
+                    }
+                }
+                
+                // 检查玩家是否获胜
+                for (let i = 0; i < boardSize; i++) {
+                    for (let j = 0; j < boardSize; j++) {
+                        if (gameState[i][j] === playerColor && checkWin(i, j)) {
+                            return -1000;
+                        }
+                    }
+                }
+                
+                // 评估棋盘状态
+                let score = 0;
+                
+                // 评估所有行
+                for (let i = 0; i < boardSize; i++) {
+                    for (let j = 0; j <= boardSize - 5; j++) {
+                        score += evaluateLine(i, j, 0, 1); // 水平
+                    }
+                }
+                
+                // 评估所有列
+                for (let j = 0; j < boardSize; j++) {
+                    for (let i = 0; i <= boardSize - 5; i++) {
+                        score += evaluateLine(i, j, 1, 0); // 垂直
+                    }
+                }
+                
+                // 评估对角线
+                for (let i = 0; i <= boardSize - 5; i++) {
+                    for (let j = 0; j <= boardSize - 5; j++) {
+                        score += evaluateLine(i, j, 1, 1); // 主对角线
+                    }
+                }
+                
+                // 评估反对角线
+                for (let i = 0; i <= boardSize - 5; i++) {
+                    for (let j = boardSize - 1; j >= 4; j--) {
+                        score += evaluateLine(i, j, 1, -1); // 副对角线
+                    }
+                }
+                
+                return score;
+            }
+            
+            // 评估一条五格线
+            function evaluateLine(row, col, deltaRow, deltaCol) {
+                let aiCount = 0;
+                let playerCount = 0;
+                
+                for (let i = 0; i < 5; i++) {
+                    const r = row + i * deltaRow;
+                    const c = col + i * deltaCol;
+                    
+                    if (gameState[r][c] === aiColor) {
+                        aiCount++;
+                    } else if (gameState[r][c] === playerColor) {
+                        playerCount++;
+                    }
+                }
+                
+                // 如果同时有AI和玩家的棋子，这条线没有价值
+                if (aiCount > 0 && playerCount > 0) {
+                    return 0;
+                }
+                
+                // AI的棋子
+                if (aiCount > 0) {
+                    switch(aiCount) {
+                        case 1: return 1;
+                        case 2: return 10;
+                        case 3: return 50;
+                        case 4: return 200;
+                        case 5: return 1000;
+                    }
+                }
+                
+                // 玩家的棋子
+                if (playerCount > 0) {
+                    switch(playerCount) {
+                        case 1: return -1;
+                        case 2: return -10;
+                        case 3: return -50;
+                        case 4: return -200;
+                        case 5: return -1000;
+                    }
+                }
+                
+                // 空线
+                return 0;
+            }
+            
+            // 评估一个位置的价值
+            function evaluatePosition(row, col, player) {
+                let score = 0;
+                
+                // 检查四个方向
+                const directions = [
+                    [0, 1],   // 水平
+                    [1, 0],   // 垂直
+                    [1, 1],   // 对角线
+                    [1, -1]   // 反对角线
+                ];
+                
+                for (const [dx, dy] of directions) {
+                    // 检查这个方向上的连续棋子
+                    let count = 1; // 当前位置
+                    let openEnds = 0;
+                    
+                    // 正向检查
+                    for (let i = 1; i <= 4; i++) {
+                        const newRow = row + i * dx;
+                        const newCol = col + i * dy;
+                        
+                        if (newRow < 0 || newRow >= boardSize || newCol < 0 || newCol >= boardSize) {
+                            break;
+                        }
+                        
+                        if (gameState[newRow][newCol] === player) {
+                            count++;
+                        } else if (gameState[newRow][newCol] === null) {
+                            openEnds++;
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 反向检查
+                    for (let i = 1; i <= 4; i++) {
+                        const newRow = row - i * dx;
+                        const newCol = col - i * dy;
+                        
+                        if (newRow < 0 || newRow >= boardSize || newCol < 0 || newCol >= boardSize) {
+                            break;
+                        }
+                        
+                        if (gameState[newRow][newCol] === player) {
+                            count++;
+                        } else if (gameState[newRow][newCol] === null) {
+                            openEnds++;
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 根据连续棋子和开放端评分
+                    if (count >= 5) {
+                        score += 100000; // 五连
+                    } else if (count === 4) {
+                        if (openEnds === 2) score += 10000; // 活四
+                        else if (openEnds === 1) score += 1000; // 冲四
+                    } else if (count === 3) {
+                        if (openEnds === 2) score += 500; // 活三
+                        else if (openEnds === 1) score += 100; // 冲三
+                    } else if (count === 2) {
+                        if (openEnds === 2) score += 50; // 活二
+                        else if (openEnds === 1) score += 10; // 冲二
+                    } else if (count === 1) {
+                        if (openEnds === 2) score += 5; // 活一
+                        else if (openEnds === 1) score += 1; // 冲一
+                    }
+                }
+                
+                // 中心位置更有价值
+                const center = Math.floor(boardSize / 2);
+                const distanceToCenter = Math.sqrt(Math.pow(row - center, 2) + Math.pow(col - center, 2));
+                score += (boardSize - distanceToCenter) * 0.1;
+                
+                return score;
             }
             
             // 放置棋子
@@ -885,7 +1387,8 @@
             // 切换玩家
             function switchPlayer() {
                 currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
-                statusDisplay.textContent = `${currentPlayer === 'black' ? '黑方' : '白方'}回合`;
+                const playerName = gameMode === 'pve' && currentPlayer === aiColor ? 'AI' : (currentPlayer === 'black' ? '黑方' : '白方');
+                statusDisplay.textContent = `${playerName}回合`;
                 updatePlayerCards();
             }
             
@@ -999,6 +1502,12 @@
             function requestUndo() {
                 if (moveHistory.length === 0 || undoUsed[currentPlayer] >= undoLimits[currentPlayer]) return;
                 
+                // 如果是PVE模式且AI刚刚下棋，直接悔棋
+                if (gameMode === 'pve' && currentPlayer === playerColor) {
+                    processUndo(true);
+                    return;
+                }
+                
                 requestingUndo = true;
                 undoQuestion.textContent = `${currentPlayer === 'black' ? '黑方' : '白方'}请求悔棋，是否同意？`;
                 undoModal.classList.add('active');
@@ -1020,6 +1529,15 @@
                 const cell = document.querySelector(`.cell[data-row="${lastMove.row}"][data-col="${lastMove.col}"]`);
                 cell.innerHTML = '';
                 
+                // 如果是PVE模式且AI刚刚下棋，需要撤销两步（玩家和AI各一步）
+                if (gameMode === 'pve' && currentPlayer === playerColor && moveHistory.length > 0) {
+                    const aiMove = moveHistory.pop();
+                    gameState[aiMove.row][aiMove.col] = null;
+                    
+                    const aiCell = document.querySelector(`.cell[data-row="${aiMove.row}"][data-col="${aiMove.col}"]`);
+                    aiCell.innerHTML = '';
+                }
+                
                 // 如果是游戏结束后的悔棋
                 if (gameEnded) {
                     gameEnded = false;
@@ -1037,12 +1555,23 @@
                     winningStones = [];
                 } else {
                     // 普通游戏中的悔棋
-                    switchPlayer();
+                    if (gameMode === 'pve') {
+                        // PVE模式下，悔棋后仍然是玩家回合
+                        currentPlayer = playerColor;
+                    } else {
+                        // PVP模式下，切换玩家
+                        switchPlayer();
+                    }
                 }
                 
                 // 更新悔棋按钮状态
                 undoButton.disabled = undoUsed[currentPlayer] >= undoLimits[currentPlayer];
                 saveButton.disabled = moveHistory.length === 0;
+                
+                // 更新状态显示
+                const playerName = gameMode === 'pve' ? (currentPlayer === playerColor ? (playerColor === 'black' ? '黑方' : '白方') : 'AI') : 
+                                (currentPlayer === 'black' ? '黑方' : '白方');
+                statusDisplay.textContent = `${playerName}回合`;
                 
                 // 更新悔棋次数显示
                 updatePlayerCards();
@@ -1057,7 +1586,10 @@
                     boardSize,
                     undoLimits,
                     undoUsed,
-                    moveCounter
+                    moveCounter,
+                    gameMode,
+                    aiDifficulty,
+                    playerColor
                 };
                 localStorage.setItem('gomoku_save', JSON.stringify(gameData));
             }
@@ -1076,12 +1608,19 @@
                 try {
                     const gameData = JSON.parse(savedData);
                     
-                    // 更新棋盘大小
+                    // 更新设置
+                    gameModeSelect.value = gameData.gameMode || 'pvp';
+                    aiDifficultySelect.value = gameData.aiDifficulty || 'medium';
+                    playerColorSelect.value = gameData.playerColor || 'black';
                     boardSizeSelect.value = gameData.boardSize || 15;
                     undoLimitSelect.value = gameData.undoLimits?.black || 3;
                     autoSaveSelect.value = 5; // 保持当前设置
                     
                     // 初始化游戏但不重置设置
+                    gameMode = gameData.gameMode || 'pvp';
+                    aiDifficulty = gameData.aiDifficulty || 'medium';
+                    playerColor = gameData.playerColor || 'black';
+                    aiColor = playerColor === 'black' ? 'white' : 'black';
                     boardSize = gameData.boardSize || 15;
                     undoLimits = gameData.undoLimits || { black: 3, white: 3 };
                     undoUsed = gameData.undoUsed || { black: 0, white: 0 };
@@ -1104,13 +1643,18 @@
                     gameActive = true;
                     gameEnded = false;
                     winningStones = [];
-                    statusDisplay.textContent = `${currentPlayer === 'black' ? '黑方' : '白方'}回合`;
+                    
+                    const playerName = gameMode === 'pve' ? (currentPlayer === playerColor ? (playerColor === 'black' ? '黑方' : '白方') : 'AI') : 
+                                    (currentPlayer === 'black' ? '黑方' : '白方');
+                    statusDisplay.textContent = `${playerName}回合`;
+                    
                     undoButton.disabled = undoUsed[currentPlayer] >= undoLimits[currentPlayer];
                     undoCountDisplay.textContent = undoUsed[currentPlayer];
                     saveButton.disabled = moveHistory.length === 0;
                     loadButton.disabled = false;
                     winMessage.style.display = 'none';
                     winAnimation.style.display = 'none';
+                    aiThinking.style.display = 'none';
                     
                     // 更新UI
                     updatePlayerCards();
